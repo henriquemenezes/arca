@@ -1,0 +1,389 @@
+package tui
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/hamsa/arca/internal/cli"
+	"github.com/hamsa/arca/internal/secret"
+)
+
+func timeNow() time.Time { return time.Now() }
+
+func writeIdentity(path string) (string, error) { return cli.WriteIdentity(path) }
+
+// ---------- menu ----------
+
+func (m *model) viewMenu() string {
+	var b strings.Builder
+	b.WriteString(header("What would you like to do?", "menu"))
+
+	for i, item := range menuItems {
+		cursor, title := "  ", item.title
+		if i == m.menuIndex {
+			cursor, title = stSelected.Render("▸ "), stSelected.Render(item.title)
+		}
+		b.WriteString(cursor + title + "\n")
+		if item.blurb != "" && i == m.menuIndex {
+			b.WriteString("    " + stMuted.Render(item.blurb) + "\n")
+		}
+	}
+
+	if m.fromDisk {
+		b.WriteString("\n" + stMuted.Render("Using "+m.cfgPath+" — backup will start from its review screen.") + "\n")
+	} else {
+		b.WriteString("\n" + stMuted.Render("No arca.toml found; you will pick what to back up.") + "\n")
+	}
+	if m.notice != "" {
+		b.WriteString(stOK.Render("✓ "+m.notice) + "\n")
+	}
+	return b.String() + help("↑↓ move", "enter choose", "q quit")
+}
+
+// ---------- backup flow ----------
+
+func (m *model) viewSources() string {
+	var b strings.Builder
+	b.WriteString(header("Choose what to back up", "backup › sources"))
+	b.WriteString(m.browser.View(m.width - 6))
+	b.WriteString("\n" + stMuted.Render(fmt.Sprintf("%s selected",
+		cli.Count(len(m.browser.selected), "item", "items"))) + "\n")
+	return b.String() + help("↑↓ move", "enter open", "← up", "space select", ". hidden", "~ home", "tab continue", "esc back")
+}
+
+func (m *model) viewMapping() string {
+	var b strings.Builder
+	b.WriteString(header("Where should each one land inside the archive?", "backup › mapping"))
+	b.WriteString(stMuted.Render("The destination is a directory in the archive; each source keeps its own name under it.") + "\n\n")
+
+	for i, e := range m.mapping {
+		cursor := "  "
+		if i == m.mapIndex {
+			cursor = stSelected.Render("▸ ")
+		}
+		dest := e.dest
+		if dest == "" {
+			dest = stCrumb.Render("(archive root)")
+		}
+		b.WriteString(fmt.Sprintf("%s%s\n", cursor, shorten(e.path, m.width-8)))
+		b.WriteString(fmt.Sprintf("      %s %s   %s %s\n",
+			stMuted.Render("into"), dest, stMuted.Render("→"), stKey.Render(e.member())))
+	}
+
+	if m.editing {
+		b.WriteString("\n" + stMuted.Render("Destination directory:") + "\n  " + m.destInput.View() + "\n")
+		return b.String() + help("enter accept", "esc cancel")
+	}
+	return b.String() + help("↑↓ move", "e edit destination", "d remove", "tab continue", "esc back")
+}
+
+func (m *model) viewCrypto() string {
+	var b strings.Builder
+	b.WriteString(header("How should the archive be encrypted?", "backup › encryption"))
+	b.WriteString(stMuted.Render("age does not allow both at once: a passphrase must be the only way in,") + "\n")
+	b.WriteString(stMuted.Render("otherwise the archive would fall back to the strength of that passphrase.") + "\n\n")
+
+	for i, item := range cryptoItems {
+		cursor, title := "  ", item.title
+		if i == m.cryptoIndex {
+			cursor, title = stSelected.Render("▸ "), stSelected.Render(item.title)
+		}
+		b.WriteString(cursor + title + "\n")
+		if i == m.cryptoIndex {
+			b.WriteString("    " + stMuted.Render(item.blurb) + "\n")
+		}
+	}
+	return b.String() + help("↑↓ move", "enter choose", "esc back")
+}
+
+func (m *model) viewPassphrase() string {
+	var b strings.Builder
+	b.WriteString(header("Type a passphrase", "backup › encryption › passphrase"))
+
+	if m.passStage == 0 {
+		b.WriteString("  " + m.passInput.View() + "\n\n")
+		b.WriteString(strengthMeter(m.passInput.Value(), 30))
+	} else {
+		b.WriteString("  " + stMuted.Render("passphrase accepted") + "\n\n")
+		b.WriteString("  " + m.confirmPass.View() + "\n")
+		b.WriteString("\n" + stMuted.Render("Type it once more. A typo here is unrecoverable.") + "\n")
+	}
+	return b.String() + help("enter continue", "esc back")
+}
+
+// strengthMeter gives immediate feedback, because a strength check that only
+// fires on submit teaches nothing.
+func strengthMeter(pass string, width int) string {
+	if pass == "" {
+		return stMuted.Render("  Strength appears as you type.") + "\n"
+	}
+	s := secret.Estimate(pass)
+	filled := (s.Score + 1) * width / 5
+	style := stErr
+	switch {
+	case s.Score >= secret.MinScore+1:
+		style = stOK
+	case s.Score >= secret.MinScore:
+		style = stWarn
+	}
+	bar := style.Render(strings.Repeat("█", filled)) + stCrumb.Render(strings.Repeat("░", width-filled))
+	line := fmt.Sprintf("  %s  %s", bar, style.Render(s.Summary))
+	if s.Score < secret.MinScore {
+		line += "\n\n" + stMuted.Render("  Too weak to accept. Press esc and choose \"Generate a passphrase\" instead.")
+	}
+	return line + "\n"
+}
+
+func (m *model) viewRecipients() string {
+	var b strings.Builder
+	b.WriteString(header("Encrypt to age recipients", "backup › encryption › recipients"))
+	b.WriteString(stMuted.Render("Any one of these keys can open the archive.") + "\n")
+	b.WriteString(stMuted.Render("List two: the key you use day to day, and a recovery key kept offline.") + "\n\n")
+	b.WriteString("  " + m.rcptInput.View() + "\n")
+	return b.String() + help("enter continue", "esc back")
+}
+
+func (m *model) viewOutput() string {
+	var b strings.Builder
+	b.WriteString(header("Where should the archive be written?", "backup › destination"))
+	b.WriteString(stMuted.Render("A directory gets a generated name; a file path is used as given.") + "\n\n")
+	b.WriteString("  " + m.outInput.View() + "\n\n")
+	if m.cfg != nil {
+		b.WriteString(stMuted.Render("  Name: "+m.archiveName()) + "\n")
+	}
+	return b.String() + help("enter continue", "esc back")
+}
+
+func (m *model) viewReview() string {
+	var b strings.Builder
+	b.WriteString(header("Review", "backup › review"))
+
+	if m.plan == nil {
+		b.WriteString(stMuted.Render("  Nothing planned yet.") + "\n")
+		return b.String() + help("esc back")
+	}
+
+	b.WriteString(stTitle.Render("Mapping") + "\n")
+	for _, s := range m.plan.Sources {
+		b.WriteString(fmt.Sprintf("  %s\n      %s %s  %s\n",
+			shorten(s.Path, m.width-8),
+			stMuted.Render("→"), stKey.Render(s.Member),
+			stMuted.Render(fmt.Sprintf("%s, %s", cli.Count(s.Stats.Files, "file", "files"), humanBytes(s.Stats.Bytes)))))
+	}
+
+	b.WriteString("\n" + stTitle.Render("Totals") + "\n")
+	b.WriteString(fmt.Sprintf("  %s · %s · %s\n",
+		cli.Count(m.plan.Stats.Files, "file", "files"),
+		cli.Count(m.plan.Stats.Dirs, "directory", "directories"),
+		humanBytes(m.plan.Stats.Bytes)))
+
+	b.WriteString("\n" + stTitle.Render("Pipeline") + "\n")
+	enc := "passphrase"
+	if n := len(m.cfg.Encryption.Recipients); n > 0 {
+		enc = cli.Count(n, "recipient", "recipients")
+	}
+	b.WriteString(fmt.Sprintf("  tar → %s (%s) → %s, %s\n",
+		m.cfg.Settings.Compressor, m.cfg.Settings.Compression, m.cfg.Settings.Cipher, enc))
+	if m.outPath != "" {
+		b.WriteString("  " + stMuted.Render(shorten(m.outPath, m.width-6)) + "\n")
+	}
+
+	if len(m.plan.Warnings) > 0 {
+		b.WriteString("\n" + stWarn.Render(cli.Count(len(m.plan.Warnings), "warning", "warnings")+":") + "\n")
+		for i, w := range m.plan.Warnings {
+			if i == 5 {
+				b.WriteString(stMuted.Render(fmt.Sprintf("  … and %d more", len(m.plan.Warnings)-5)) + "\n")
+				break
+			}
+			b.WriteString("  " + stWarn.Render("!") + " " + shorten(w, m.width-6) + "\n")
+		}
+	}
+	if m.notice != "" {
+		b.WriteString("\n" + stWarn.Render("! "+m.notice) + "\n")
+	}
+	return b.String() + help("enter start the backup", "esc back", "q quit")
+}
+
+func (m *model) viewRunning() string {
+	var b strings.Builder
+	b.WriteString(header("Writing the archive", "backup › running"))
+
+	var ratio float64
+	if m.plan != nil && m.plan.Stats.Bytes > 0 {
+		ratio = float64(m.lastProg.Bytes) / float64(m.plan.Stats.Bytes)
+	}
+	b.WriteString("  " + m.bar.ViewAs(minFloat(ratio, 1)) + "\n\n")
+	b.WriteString(fmt.Sprintf("  %s of %s · %s\n",
+		humanBytes(m.lastProg.Bytes),
+		humanBytes(planBytes(m)),
+		cli.Count(m.lastProg.Files, "file", "files")))
+	b.WriteString("  " + stMuted.Render(shorten(m.lastProg.Member, m.width-6)) + "\n")
+	b.WriteString("\n  " + stMuted.Render("Encrypted on the way out; nothing is written in the clear.") + "\n")
+	return b.String() + help("ctrl+c abort")
+}
+
+func planBytes(m *model) int64 {
+	if m.plan == nil {
+		return 0
+	}
+	return m.plan.Stats.Bytes
+}
+
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func (m *model) viewDone() string {
+	var b strings.Builder
+	b.WriteString(header("Backup complete", "backup › done"))
+	if m.result == nil {
+		return b.String() + help("enter menu")
+	}
+
+	b.WriteString("  " + stOK.Render(shorten(m.result.Path, m.width-6)) + "\n\n")
+	b.WriteString(fmt.Sprintf("  %s · %s from %s of sources\n\n",
+		cli.Count(m.result.Stats.Files, "file", "files"),
+		humanBytes(m.result.ArchiveBytes), humanBytes(m.result.Stats.Bytes)))
+
+	if len(m.result.Warnings) > 0 {
+		b.WriteString(stWarn.Render(cli.Count(len(m.result.Warnings), "warning", "warnings")+
+			" recorded in the archive summary") + "\n\n")
+	}
+
+	b.WriteString(stTitle.Render("Restore without arca, on any Unix machine") + "\n")
+	b.WriteString("  " + stKey.Render(cli.ManualRestoreCommand(m.result.Path, m.cfg)) + "\n\n")
+
+	notice := cli.SecretNotice
+	if m.genPass != "" {
+		notice = "Your passphrase — save it now, it is shown once:\n\n    " + m.genPass + "\n\n" + cli.SecretNotice
+	}
+	b.WriteString(stNotice.Width(minInt(m.width-8, 84)).Render(notice) + "\n")
+
+	if m.notice != "" {
+		b.WriteString(stOK.Render("✓ "+m.notice) + "\n")
+	}
+	if !m.fromDisk {
+		return b.String() + help("s save this selection as arca.toml", "enter menu", "q quit")
+	}
+	return b.String() + help("enter menu", "q quit")
+}
+
+// ---------- reading an archive ----------
+
+func (m *model) viewPickArchive() string {
+	title := "Choose an archive to inspect"
+	if m.intent == intentRestore {
+		title = "Choose an archive to restore"
+	}
+	var b strings.Builder
+	b.WriteString(header(title, "archive › open"))
+	b.WriteString(m.browser.View(m.width - 6))
+	return b.String() + help("↑↓ move", "enter open / choose", "← up", ". hidden", "~ home", "esc back")
+}
+
+func (m *model) viewArchiveKey() string {
+	var b strings.Builder
+	b.WriteString(header("Unlock the archive", "archive › key"))
+	b.WriteString("  " + stMuted.Render(shorten(m.archivePath, m.width-6)) + "\n\n")
+	b.WriteString("  " + m.passInput.View() + "\n\n")
+	b.WriteString(stMuted.Render("  A passphrase, or the path to an age identity file.") + "\n")
+	return b.String() + help("enter unlock", "esc back")
+}
+
+func (m *model) viewArchiveInfo() string {
+	var b strings.Builder
+	b.WriteString(header("Archive contents", "archive › details"))
+	if m.info == nil {
+		return b.String() + help("esc back")
+	}
+	mf := m.info.Manifest
+
+	rows := [][2]string{
+		{"created", mf.CreatedAt.Local().Format("2006-01-02 15:04:05 MST")},
+		{"host", fmt.Sprintf("%s (%s/%s)", mf.Host.Hostname, mf.Host.OS, mf.Host.Arch)},
+		{"written by", mf.Tool + " " + mf.ToolVersion},
+		{"pipeline", fmt.Sprintf("tar → %s (%s) → %s", m.info.Compressor, mf.Pipeline.Compression, m.info.Cipher)},
+		{"encryption", mf.Pipeline.EncryptionMode},
+	}
+	if mf.Planned != nil {
+		rows = append(rows, [2]string{"contents", fmt.Sprintf("%s, %s",
+			cli.Count(mf.Planned.Files, "file", "files"), humanBytes(mf.Planned.Bytes))})
+	}
+	for _, r := range rows {
+		b.WriteString(fmt.Sprintf("  %s %s\n", stMuted.Render(padRight(r[0]+":", 12)), r[1]))
+	}
+
+	b.WriteString("\n" + stTitle.Render("Mapping") + "\n")
+	for _, g := range mf.Groups {
+		b.WriteString("  " + stKey.Render(g.Name) + "\n")
+		for _, s := range g.Sources {
+			b.WriteString(fmt.Sprintf("      %s %s %s\n",
+				shorten(s.Path, m.width-24), stMuted.Render("→"), s.Member))
+		}
+	}
+
+	if m.intent == intentRestore {
+		return b.String() + help("enter choose a target and restore", "esc back", "q quit")
+	}
+	return b.String() + help("esc back", "q quit")
+}
+
+func padRight(s string, n int) string {
+	if len(s) >= n {
+		return s
+	}
+	return s + strings.Repeat(" ", n-len(s))
+}
+
+func (m *model) viewRestoreTarget() string {
+	var b strings.Builder
+	b.WriteString(header("Where should it be restored?", "restore › target"))
+	b.WriteString(stMuted.Render("The archive already holds the mapped layout, so it is recreated under this directory.") + "\n")
+	b.WriteString(stMuted.Render("Nothing outside it is ever written, and existing files are never replaced.") + "\n\n")
+	b.WriteString("  " + m.targetInput.View() + "\n")
+	return b.String() + help("enter restore", "esc back")
+}
+
+func (m *model) viewRestoring() string {
+	var b strings.Builder
+	b.WriteString(header("Restoring", "restore › running"))
+	b.WriteString(fmt.Sprintf("  %s · %s\n",
+		cli.Count(m.lastProg.Files, "file", "files"), humanBytes(m.lastProg.Bytes)))
+	b.WriteString("  " + stMuted.Render(shorten(m.lastProg.Member, m.width-6)) + "\n")
+	return b.String() + help("ctrl+c abort")
+}
+
+func (m *model) viewRestoreDone() string {
+	var b strings.Builder
+	b.WriteString(header("Restore complete", "restore › done"))
+	if m.restored == nil {
+		return b.String() + help("enter menu")
+	}
+	b.WriteString("  " + stOK.Render(m.restored.Target) + "\n\n")
+	b.WriteString(fmt.Sprintf("  %s · %s · %s\n",
+		cli.Count(m.restored.Files, "file", "files"),
+		cli.Count(m.restored.Dirs, "directory", "directories"),
+		humanBytes(m.restored.Bytes)))
+	if len(m.restored.Warnings) > 0 {
+		b.WriteString("\n" + stWarn.Render(cli.Count(len(m.restored.Warnings), "warning", "warnings")+":") + "\n")
+		for _, w := range m.restored.Warnings {
+			b.WriteString("  " + stWarn.Render("!") + " " + shorten(w, m.width-6) + "\n")
+		}
+	}
+	return b.String() + help("enter menu", "q quit")
+}
+
+func (m *model) viewGenerated() string {
+	var b strings.Builder
+	b.WriteString(header("Generated", "keys"))
+	b.WriteString("\n    " + stKey.Render(m.generated) + "\n\n")
+	if m.notice != "" {
+		b.WriteString("  " + stMuted.Render(m.notice) + "\n\n")
+	}
+	b.WriteString(stNotice.Width(minInt(m.width-8, 84)).Render(cli.SecretNotice) + "\n")
+	return b.String() + help("enter menu", "q quit")
+}

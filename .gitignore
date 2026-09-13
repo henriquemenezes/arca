@@ -1,0 +1,6 @@
+/arca
+/.tools/
+*.tar.zst.age
+*.tar.zst.age.partial
+arca.toml
+identity.age
