@@ -1,6 +1,14 @@
-# arca
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/arca-logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/arca-logo-light.svg">
+    <img alt="arca" src="docs/assets/arca-logo-light.svg" width="360">
+  </picture>
+</p>
 
-Single-file encrypted backups for Unix. One binary, no runtime dependencies.
+<p align="center">
+  Single-file encrypted backups for Unix. One binary, no runtime dependencies.
+</p>
 
 ```
 arca backup --source ~/.ssh:dotfiles --source ~/.aws:dotfiles -o ~/backups/
