@@ -119,12 +119,18 @@ func bindKeys(cmd *cobra.Command, k *KeyFlags, forWriting bool) {
 // opens the interactive interface, which is the friendliest default for a tool
 // people reach for a few times a year.
 func NewRootCommand(runTUI func() error) *cobra.Command {
+	fancy := fancyOutput()
+	long := "arca packs the paths you choose into one compressed, encrypted file.\n\n" +
+		"The archive is plain tar + zstd + age, so it can always be restored without arca:\n" +
+		"  age -d ARCHIVE | zstd -d | tar -x"
+	if fancy {
+		long = CompactBanner(Version) + "\n\n" + long
+	}
+
 	root := &cobra.Command{
-		Use:   "arca",
-		Short: "Single-file encrypted backups for Unix",
-		Long: "arca packs the paths you choose into one compressed, encrypted file.\n\n" +
-			"The archive is plain tar + zstd + age, so it can always be restored without arca:\n" +
-			"  age -d ARCHIVE | zstd -d | tar -x",
+		Use:           "arca",
+		Short:         "Single-file encrypted backups for Unix",
+		Long:          long,
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -135,6 +141,7 @@ func NewRootCommand(runTUI func() error) *cobra.Command {
 			return cmd.Help()
 		},
 	}
+	root.SetVersionTemplate(VersionText(Version, fancy))
 	root.AddCommand(
 		newInitCommand(),
 		newGenKeyCommand(),

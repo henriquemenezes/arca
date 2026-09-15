@@ -45,6 +45,16 @@ func header(title, crumb string) string {
 	return line + "\n" + lipgloss.NewStyle().Bold(true).Render(title) + "\n\n"
 }
 
+// The entry screen spends whatever rows are left over on the mark. The menu
+// needs 15 rows at its tallest — the extra row is the notice left behind by
+// generating a key — and the full mark adds 17 to that while the ark alone adds
+// 10. Below the smaller sum the screen shows no artwork rather than scroll the
+// menu out of view.
+const (
+	minHeightForMark = 32
+	minHeightForArk  = 25
+)
+
 func help(keys ...string) string {
 	out := ""
 	for i, k := range keys {

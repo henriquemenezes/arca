@@ -17,6 +17,12 @@ func writeIdentity(path string) (string, error) { return cli.WriteIdentity(path)
 
 func (m *model) viewMenu() string {
 	var b strings.Builder
+	switch opts := cli.AutoBannerOpts(""); {
+	case m.height >= minHeightForMark:
+		b.WriteString(cli.Mark(opts) + "\n\n")
+	case m.height >= minHeightForArk:
+		b.WriteString(cli.Ark(opts) + "\n\n")
+	}
 	b.WriteString(header("What would you like to do?", "menu"))
 
 	for i, item := range menuItems {
