@@ -16,35 +16,46 @@ func writeIdentity(path string) (string, error) { return cli.WriteIdentity(path)
 // ---------- menu ----------
 
 func (m *model) viewMenu() string {
-	var b strings.Builder
+	var head strings.Builder
 	switch opts := cli.AutoBannerOpts(""); {
 	case m.height >= minHeightForMark:
-		b.WriteString(cli.Mark(opts) + "\n\n")
+		head.WriteString(cli.Mark(opts) + "\n\n")
 	case m.height >= minHeightForArk:
-		b.WriteString(cli.Ark(opts) + "\n\n")
+		head.WriteString(cli.Ark(opts) + "\n\n")
 	}
-	b.WriteString(header("What would you like to do?", "menu"))
+	head.WriteString(header("What would you like to do?", "menu"))
 
-	for i, item := range menuItems {
-		cursor, title := "  ", item.title
-		if i == m.menuIndex {
-			cursor, title = stSelected.Render("▸ "), stSelected.Render(item.title)
-		}
-		b.WriteString(cursor + title + "\n")
-		if item.blurb != "" && i == m.menuIndex {
-			b.WriteString("    " + stMuted.Render(item.blurb) + "\n")
-		}
-	}
-
+	var foot strings.Builder
 	if m.fromDisk {
-		b.WriteString("\n" + stMuted.Render("Using "+m.cfgPath+" — backup will start from its review screen.") + "\n")
+		foot.WriteString("\n" + stMuted.Render("Using "+m.cfgPath+" — backup will start from its review screen.") + "\n")
 	} else {
-		b.WriteString("\n" + stMuted.Render("No arca.toml found; you will pick what to back up.") + "\n")
+		foot.WriteString("\n" + stMuted.Render("No arca.toml found; you will pick what to back up.") + "\n")
 	}
 	if m.notice != "" {
-		b.WriteString(stOK.Render("✓ "+m.notice) + "\n")
+		foot.WriteString(stOK.Render("✓ "+m.notice) + "\n")
 	}
-	return b.String() + help("↑↓ move", "enter choose", "q quit")
+	foot.WriteString(help("↑↓ move", "enter choose", "q quit"))
+
+	m.fitMenu(head.String(), foot.String())
+	return head.String() + m.menu.View() + foot.String()
+}
+
+// fitMenu hands the list the rows the rest of the screen leaves it. When they
+// are too few to carry a blurb under every item the blurbs go, the same trade
+// the artwork above makes; when even the bare titles do not fit, the list
+// paginates rather than running off the bottom.
+func (m *model) fitMenu(head, foot string) {
+	// The screen is padded by one row top and bottom; the rest of the budget
+	// is whatever head and foot already spend.
+	rows := m.height - 2 - strings.Count(head, "\n") - strings.Count(foot, "\n")
+
+	n := len(m.menu.Items())
+	d := menuDelegate(rows >= itemRows(menuDelegate(true), n))
+	m.menu.SetDelegate(d)
+
+	want := itemRows(d, n)
+	m.menu.SetShowPagination(rows < want)
+	m.menu.SetSize(maxInt(20, m.width-6), maxInt(d.Height()+d.Spacing(), minInt(rows, want)))
 }
 
 // ---------- backup flow ----------

@@ -5,7 +5,10 @@
 // is one execution path and one place where behaviour can go wrong.
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/lipgloss"
+)
 
 var (
 	colAccent = lipgloss.Color("39")
@@ -45,11 +48,53 @@ func header(title, crumb string) string {
 	return line + "\n" + lipgloss.NewStyle().Bold(true).Render(title) + "\n\n"
 }
 
+// newMenuList builds the entry screen's list. The screen draws its own header
+// and help line, as every other screen does, so the list contributes only the
+// items themselves.
+func newMenuList() list.Model {
+	l := list.New(menuItems, menuDelegate(true), 0, 0)
+	l.SetShowTitle(false)
+	l.SetShowStatusBar(false)
+	l.SetShowHelp(false)
+	l.SetFilteringEnabled(false)
+	l.DisableQuitKeybindings() // the screen decides what quitting means
+	l.Styles.PaginationStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(colFaint)
+	return l
+}
+
+// menuDelegate draws the items in arca's palette. Without blurbs it collapses
+// to one line per item, which is what a short terminal gets.
+func menuDelegate(blurbs bool) list.DefaultDelegate {
+	d := list.NewDefaultDelegate()
+	d.ShowDescription = blurbs
+	if !blurbs {
+		d.SetSpacing(0)
+	}
+	// A heavier stroke than the list's default, so the selected row is easy to
+	// find without having to read the colour.
+	bar := lipgloss.OuterHalfBlockBorder()
+	d.Styles.SelectedTitle = d.Styles.SelectedTitle.
+		Border(bar, false, false, false, true).
+		BorderForeground(colAccent).Foreground(colAccent).Bold(true)
+	d.Styles.SelectedDesc = d.Styles.SelectedDesc.
+		Border(bar, false, false, false, true).
+		BorderForeground(colAccent).Foreground(colMuted).Bold(false)
+	d.Styles.NormalTitle = d.Styles.NormalTitle.Foreground(lipgloss.NoColor{})
+	d.Styles.NormalDesc = d.Styles.NormalDesc.Foreground(colFaint)
+	return d
+}
+
+// itemRows is how many rows the list needs to show every item at once: each
+// item plus the gap that follows it, including a trailing gap the list pads in.
+func itemRows(d list.DefaultDelegate, n int) int {
+	return n * (d.Height() + d.Spacing())
+}
+
 // The entry screen spends whatever rows are left over on the mark. The menu
-// needs 15 rows at its tallest — the extra row is the notice left behind by
-// generating a key — and the full mark adds 17 to that while the ark alone adds
-// 10. Below the smaller sum the screen shows no artwork rather than scroll the
-// menu out of view.
+// needs 26 rows at its tallest — a blurb under every item, plus the notice left
+// behind by generating a key — and the full mark adds 17 to that while the ark
+// alone adds 10. The thresholds below are where the artwork still leaves the
+// menu enough room to stay complete, one line per item.
 const (
 	minHeightForMark = 32
 	minHeightForArk  = 25

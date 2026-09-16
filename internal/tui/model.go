@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -73,7 +74,7 @@ type model struct {
 	mapIndex int
 	editing  bool
 
-	menuIndex   int
+	menu        list.Model
 	cryptoIndex int
 
 	destInput   textinput.Model
@@ -111,13 +112,21 @@ const (
 	intentRestore
 )
 
-var menuItems = []struct{ title, blurb string }{
-	{"Back up", "pack the paths you choose into one encrypted file"},
-	{"Restore", "extract an archive, reproducing its mapped layout"},
-	{"Inspect", "read what an archive holds, without extracting"},
-	{"Generate an identity", "an age key pair, for unattended backups and recovery keys"},
-	{"Generate a passphrase", "a strong diceware passphrase from the EFF wordlist"},
-	{"Quit", ""},
+// menuItem is one entry on the entry screen. It satisfies list.DefaultItem so
+// the list's delegate can draw the blurb under the title.
+type menuItem struct{ title, blurb string }
+
+func (i menuItem) Title() string       { return i.title }
+func (i menuItem) Description() string { return i.blurb }
+func (i menuItem) FilterValue() string { return i.title }
+
+var menuItems = []list.Item{
+	menuItem{"Back up", "pack the paths you choose into one encrypted file"},
+	menuItem{"Restore", "extract an archive, reproducing its mapped layout"},
+	menuItem{"Inspect", "read what an archive holds, without extracting"},
+	menuItem{"Generate an identity", "an age key pair, for unattended backups and recovery keys"},
+	menuItem{"Generate a passphrase", "a strong diceware passphrase from the EFF wordlist"},
+	menuItem{"Quit", "leave arca; nothing is written"},
 }
 
 var cryptoItems = []struct{ title, blurb string }{
@@ -144,6 +153,7 @@ func newModel() *model {
 
 	m := &model{
 		state:       stateMenu,
+		menu:        newMenuList(),
 		bar:         progress.New(progress.WithDefaultGradient()),
 		msgs:        make(chan tea.Msg, 64),
 		destInput:   mk("dotfiles  (empty = archive root)", 40),

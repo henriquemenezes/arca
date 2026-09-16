@@ -59,18 +59,16 @@ func (m *model) keyMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc":
 		return m, tea.Quit
-	case "up", "k":
-		m.menuIndex = (m.menuIndex - 1 + len(menuItems)) % len(menuItems)
-	case "down", "j":
-		m.menuIndex = (m.menuIndex + 1) % len(menuItems)
 	case "enter":
 		return m.chooseMenu()
 	}
-	return m, nil
+	var cmd tea.Cmd
+	m.menu, cmd = m.menu.Update(msg)
+	return m, cmd
 }
 
 func (m *model) chooseMenu() (tea.Model, tea.Cmd) {
-	switch m.menuIndex {
+	switch m.menu.Index() {
 	case 0: // back up
 		if m.fromDisk {
 			// The config already says what to capture; go straight to review.
