@@ -284,7 +284,7 @@ func (m *model) viewDone() string {
 		b.WriteString(stOK.Render("✓ "+m.notice) + "\n")
 	}
 	if !m.fromDisk {
-		return b.String() + help("s save this selection as arca.toml", "enter menu", "q quit")
+		return b.String() + help("s save this selection to ~/.arca/arca.toml", "enter menu", "q quit")
 	}
 	return b.String() + help("enter menu", "q quit")
 }

@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hamsa/arca/internal/archive"
+	"github.com/hamsa/arca/internal/cli"
 	"github.com/hamsa/arca/internal/codec"
 	"github.com/hamsa/arca/internal/config"
 )
@@ -21,6 +22,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	os.Setenv("ARCA_HOME", filepath.Join(sandbox, "arca"))
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(sandbox, "config"))
 	os.Setenv("HOME", filepath.Join(sandbox, "home"))
 	os.MkdirAll(filepath.Join(sandbox, "home"), 0o755)
@@ -298,7 +300,7 @@ func TestMenuReachesEachFlow(t *testing.T) {
 	if !strings.HasPrefix(m.generated, "age1") {
 		t.Errorf("generated recipient = %q", m.generated)
 	}
-	if _, err := os.Stat(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "arca", "identity.age")); err != nil {
+	if _, err := os.Stat(filepath.Join(os.Getenv(cli.HomeEnv), cli.DefaultIdentityName)); err != nil {
 		t.Errorf("identity was not written inside the sandbox: %v", err)
 	}
 }

@@ -33,7 +33,7 @@ type globalFlags struct {
 // bind registers the configuration flags shared by plan and backup.
 func (g *globalFlags) bind(cmd *cobra.Command) {
 	f := cmd.Flags()
-	f.StringVarP(&g.configPath, "config", "c", "", "path to arca.toml (default: ./arca.toml, then the user config dir)")
+	f.StringVarP(&g.configPath, "config", "c", "", "path to arca.toml (default: ./arca.toml, then ~/.arca/arca.toml)")
 	f.StringArrayVar(&g.sources, "source", nil, "ad-hoc source as PATH[:DEST], repeatable; works with no config file")
 	f.StringVar(&g.level, "level", "", "compression level: fastest, default, better, best")
 	f.IntVar(&g.threads, "threads", 0, "compression threads (0 = one per CPU)")

@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -58,21 +59,39 @@ exclude = ["*.iso", "*.dmg"]
 func newInitCommand() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "init",
+		Use:   "init [PATH]",
 		Short: "Write a commented arca.toml to start from",
-		Args:  cobra.NoArgs,
+		Long: "init writes a commented config to ~/.arca/arca.toml, which every later " +
+			"command finds on its own.\n\n" +
+			"Give a PATH for a config that belongs to one directory instead: an " +
+			"arca.toml next to you is preferred over the one in ~/.arca, so a project " +
+			"can carry its own.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := cmd.OutOrStdout()
-			if _, err := os.Stat(ConfigFileName); err == nil && !force {
-				return fmt.Errorf("%s already exists (use --force to replace it)", ConfigFileName)
+			given := ""
+			if len(args) == 1 {
+				given = args[0]
 			}
-			if err := os.WriteFile(ConfigFileName, []byte(sampleConfig), 0o644); err != nil {
-				return fmt.Errorf("writing %s: %w", ConfigFileName, err)
+			path, err := ResolveConfigPath(given)
+			if err != nil {
+				return err
+			}
+			if _, err := os.Stat(path); err == nil && !force {
+				return fmt.Errorf("%s already exists (use --force to replace it)", path)
+			}
+			// 0700 on the directory because it is shared with identity.age; the
+			// config itself holds no secret, so it stays readable at 0644.
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				return fmt.Errorf("creating %s: %w", filepath.Dir(path), err)
+			}
+			if err := os.WriteFile(path, []byte(sampleConfig), 0o644); err != nil {
+				return fmt.Errorf("writing %s: %w", path, err)
 			}
 
-			fmt.Fprintf(out, "%s %s\n\n", StyleOK.Render("Created"), ConfigFileName)
+			fmt.Fprintf(out, "%s %s\n\n", StyleOK.Render("Created"), path)
 			fmt.Fprintln(out, "Next:")
-			fmt.Fprintf(out, "  1. Edit %s so it lists what you actually want.\n", ConfigFileName)
+			fmt.Fprintf(out, "  1. Edit %s so it lists what you actually want.\n", path)
 			fmt.Fprintf(out, "  2. %s   %s\n", StyleKey.Render("arca plan"), StyleMuted.Render("— check the mapping and sizes; writes nothing"))
 			fmt.Fprintf(out, "  3. %s %s\n\n", StyleKey.Render("arca backup"), StyleMuted.Render("— write the archive"))
 			fmt.Fprintln(out, StyleMuted.Render(
@@ -100,7 +119,7 @@ func newGenKeyCommand() *cobra.Command {
 			if path == "" {
 				path = DefaultIdentityPath()
 				if path == "" {
-					return fmt.Errorf("cannot determine a config directory; pass --output")
+					return fmt.Errorf("cannot locate your home directory; pass --output")
 				}
 			}
 			recipient, err := WriteIdentity(path)
@@ -118,7 +137,7 @@ func newGenKeyCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&output, "output", "o", "", "where to write the identity (default: the user config dir)")
+	cmd.Flags().StringVarP(&output, "output", "o", "", "where to write the identity (default: ~/.arca/identity.age)")
 	return cmd
 }
 

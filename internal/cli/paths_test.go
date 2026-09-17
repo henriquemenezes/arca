@@ -136,3 +136,194 @@ func TestFindConfig(t *testing.T) {
 		}
 	})
 }
+
+func TestUserDir(t *testing.T) {
+	t.Run("ARCA_HOME wins", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv(cli.HomeEnv, dir)
+		if got := cli.UserDir(); got != dir {
+			t.Errorf("got %q, want %q", got, dir)
+		}
+	})
+
+	t.Run("otherwise it is ~/.arca", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv(cli.HomeEnv, "")
+		t.Setenv("HOME", home)
+		want := filepath.Join(home, cli.UserDirName)
+		if got := cli.UserDir(); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+}
+
+// The search order is the whole contract: a config next to you beats the one in
+// ~/.arca, which beats the directory arca used before it had one of its own.
+func TestFindConfigSearchOrder(t *testing.T) {
+	write := func(t *testing.T, dir string) string {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, cli.ConfigFileName)
+		if err := os.WriteFile(p, []byte("# empty\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	// setup returns the three candidate directories, none of them populated.
+	setup := func(t *testing.T) (cwd, user, legacy string) {
+		t.Helper()
+		root := t.TempDir()
+		cwd = filepath.Join(root, "cwd")
+		user = filepath.Join(root, "arca")
+		legacy = filepath.Join(root, "xdg", "arca")
+		if err := os.MkdirAll(cwd, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(cwd)
+		t.Setenv(cli.HomeEnv, "")
+		t.Setenv("HOME", filepath.Join(root, "home"))
+		t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg"))
+		return cwd, user, legacy
+	}
+
+	t.Run("the working directory wins", func(t *testing.T) {
+		cwd, user, legacy := setup(t)
+		write(t, cwd)
+		write(t, user)
+		write(t, legacy)
+		t.Setenv(cli.HomeEnv, user)
+		got, err := cli.FindConfig("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != cli.ConfigFileName {
+			t.Errorf("got %q, want the local %q", got, cli.ConfigFileName)
+		}
+	})
+
+	t.Run("then the user directory", func(t *testing.T) {
+		_, user, legacy := setup(t)
+		want := write(t, user)
+		write(t, legacy)
+		t.Setenv(cli.HomeEnv, user)
+		got, err := cli.FindConfig("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("then the legacy directory", func(t *testing.T) {
+		_, _, legacy := setup(t)
+		want := write(t, legacy)
+		got, err := cli.FindConfig("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("got %q, want the legacy %q", got, want)
+		}
+	})
+
+	// ARCA_HOME is an override, not an addition: it has to be enough on its own
+	// for a test or a sandbox to be sure nothing else is being read.
+	t.Run("ARCA_HOME switches the legacy directory off", func(t *testing.T) {
+		_, user, legacy := setup(t)
+		write(t, legacy)
+		t.Setenv(cli.HomeEnv, user)
+		got, err := cli.FindConfig("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "" {
+			t.Errorf("got %q, want nothing: ARCA_HOME was set", got)
+		}
+	})
+}
+
+// Losing sight of an identity is not an inconvenience, it is an archive nobody
+// can open. The old location has to stay readable.
+func TestFindIdentityReadsTheLegacyDirectory(t *testing.T) {
+	root := t.TempDir()
+	legacy := filepath.Join(root, "xdg", "arca")
+	if err := os.MkdirAll(legacy, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(legacy, cli.DefaultIdentityName)
+	if err := os.WriteFile(want, []byte("# not a real key\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(cli.HomeEnv, "")
+	t.Setenv("HOME", filepath.Join(root, "home"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg"))
+
+	if got := cli.FindIdentity(); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+
+	// A key in the current location takes precedence over the old one.
+	current := filepath.Join(root, "arca")
+	if err := os.MkdirAll(current, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	newer := filepath.Join(current, cli.DefaultIdentityName)
+	if err := os.WriteFile(newer, []byte("# not a real key\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(cli.HomeEnv, current)
+	if got := cli.FindIdentity(); got != newer {
+		t.Errorf("got %q, want %q", got, newer)
+	}
+}
+
+func TestResolveConfigPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(cli.HomeEnv, home)
+
+	t.Run("empty means the user directory", func(t *testing.T) {
+		got, err := cli.ResolveConfigPath("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := filepath.Join(home, cli.ConfigFileName); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("an existing directory gets the conventional name", func(t *testing.T) {
+		dir := t.TempDir()
+		got, err := cli.ResolveConfigPath(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := filepath.Join(dir, cli.ConfigFileName); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("a trailing separator means a directory even if it does not exist", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "nope") + string(filepath.Separator)
+		got, err := cli.ResolveConfigPath(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := filepath.Join(dir, cli.ConfigFileName); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("anything else is taken literally", func(t *testing.T) {
+		got, err := cli.ResolveConfigPath("backup.toml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "backup.toml" {
+			t.Errorf("got %q, want the name as given", got)
+		}
+	})
+}

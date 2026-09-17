@@ -11,8 +11,51 @@ import (
 )
 
 // ConfigFileName is the conventional config name, looked up in the working
-// directory first and then in the user's config directory.
+// directory first and then in arca's own directory.
 const ConfigFileName = "arca.toml"
+
+// UserDirName is the directory arca owns inside the user's home, and HomeEnv
+// is the only way to move it.
+const (
+	UserDirName = ".arca"
+	HomeEnv     = "ARCA_HOME"
+)
+
+// UserDir is where arca writes the config and the key: ~/.arca.
+//
+// Deliberately not the XDG location. This is the same path on every Unix, next
+// to the ~/.ssh and ~/.gnupg it exists to protect, and a restore onto a freshly
+// installed machine is one directory to put back.
+//
+// $ARCA_HOME overrides it, which is also what lets the test suite run without
+// ever going near a real home directory.
+func UserDir() string {
+	if dir := os.Getenv(HomeEnv); dir != "" {
+		return dir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, UserDirName)
+}
+
+// legacyUserDir is where arca used to keep both files: <os.UserConfigDir>/arca.
+//
+// It is still read so that an existing install keeps working. An identity.age
+// stranded there is not an inconvenience — it is a backup nobody can open
+// again. Nothing is ever written to it, and $ARCA_HOME switches it off so that
+// an override is a complete one.
+func legacyUserDir() string {
+	if os.Getenv(HomeEnv) != "" {
+		return ""
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "arca")
+}
 
 // FindConfig locates the configuration to use. An explicit path must exist; the
 // implicit search returns "" when there is none, which is not an error because
@@ -35,12 +78,39 @@ func FindConfig(explicit string) (string, error) {
 	return "", nil
 }
 
+// configSearchPath lists the candidates in precedence order: the working
+// directory beats the user's own, which beats the directory arca used before.
 func configSearchPath() []string {
 	paths := []string{ConfigFileName}
-	if dir, err := os.UserConfigDir(); err == nil {
-		paths = append(paths, filepath.Join(dir, "arca", ConfigFileName))
+	for _, dir := range []string{UserDir(), legacyUserDir()} {
+		if dir != "" {
+			paths = append(paths, filepath.Join(dir, ConfigFileName))
+		}
 	}
 	return paths
+}
+
+// ResolveConfigPath turns an optional user-given path into the file to write.
+//
+// Empty means the default, <UserDir>/arca.toml. A directory — existing, or
+// written with a trailing separator — gets the conventional name inside it, and
+// anything else is taken literally. That is the same rule ResolveOutputPath
+// applies to the archive, so learning one teaches the other.
+func ResolveConfigPath(given string) (string, error) {
+	if given == "" {
+		dir := UserDir()
+		if dir == "" {
+			return "", fmt.Errorf("cannot locate your home directory; give an explicit path")
+		}
+		return filepath.Join(dir, ConfigFileName), nil
+	}
+	if strings.HasSuffix(given, string(filepath.Separator)) {
+		return filepath.Join(given, ConfigFileName), nil
+	}
+	if info, err := os.Stat(given); err == nil && info.IsDir() {
+		return filepath.Join(given, ConfigFileName), nil
+	}
+	return given, nil
 }
 
 // DefaultArchiveName builds the conventional file name. Host and timestamp are

@@ -420,14 +420,22 @@ func (m *model) keyFinished(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) saveConfig() error {
-	if _, err := os.Stat(cli.ConfigFileName); err == nil {
-		return fmt.Errorf("%s already exists here; not replacing it", cli.ConfigFileName)
-	}
-	body := m.renderTOML(m.cfg)
-	if err := os.WriteFile(cli.ConfigFileName, []byte(body), 0o644); err != nil {
+	path, err := cli.ResolveConfigPath("")
+	if err != nil {
 		return err
 	}
-	m.notice = "Saved " + cli.ConfigFileName + " — next time `arca backup` reuses it."
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%s already exists; not replacing it", path)
+	}
+	// 0700 on the directory: it is shared with identity.age.
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	body := m.renderTOML(m.cfg)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		return err
+	}
+	m.notice = "Saved " + path + " — next time `arca backup` reuses it."
 	m.fromDisk = true
 	return nil
 }
@@ -525,7 +533,7 @@ func (m *model) acceptRestoreTarget() (tea.Model, tea.Cmd) {
 func (m *model) generateIdentity() tea.Cmd {
 	path := cli.DefaultIdentityPath()
 	if path == "" {
-		m.fail(errors.New("cannot determine a config directory for the identity"))
+		m.fail(errors.New("cannot locate your home directory for the identity"))
 		return nil
 	}
 	if _, err := os.Stat(path); err == nil {

@@ -82,7 +82,8 @@ Precedence: **defaults < `arca.toml` < flags**.
 
 ```bash
 arca                    # interactive, when run on a terminal with no arguments
-arca init               # write a commented arca.toml
+arca init               # write a commented ~/.arca/arca.toml
+arca init .             # …or one that belongs to this directory
 arca plan               # what would be captured; writes nothing
 arca backup -o ~/backups/
 arca verify  ARCHIVE
@@ -95,6 +96,24 @@ Ad-hoc, with no config file at all:
 ```bash
 arca backup --source ~/.ssh:dotfiles --source ~/Downloads -o /media/usb/
 ```
+
+### Where arca keeps things
+
+`~/.arca/` holds the config and the key, and is the same path on every Unix —
+one directory to put back on a machine you have just reinstalled.
+
+| | |
+|---|---|
+| `~/.arca/arca.toml` | written by `arca init`, found by every later command |
+| `~/.arca/identity.age` | written by `arca gen-key`, mode 0600 |
+
+Config lookup stops at the first hit: `./arca.toml`, then `~/.arca/arca.toml`.
+A config next to you wins, so a directory can carry its own without affecting
+anything else. `-c` points at any file directly.
+
+`$ARCA_HOME` overrides `~/.arca` entirely. Earlier versions kept both files in
+`~/.config/arca/` (`~/Library/Application Support/arca/` on macOS); that path is
+still read, so nothing written by an older arca becomes unreachable.
 
 ## Encryption
 

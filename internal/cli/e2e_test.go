@@ -22,7 +22,11 @@ func newHarness(t *testing.T) *harness {
 	t.Helper()
 	dir := t.TempDir()
 	t.Chdir(dir)
-	// Keep the implicit config search away from the real user config.
+	// Fence the whole run away from the real home. `arca init` and `arca
+	// gen-key` now default to ~/.arca, so without this a test would write a
+	// config — or a private key — into the home of whoever runs the suite.
+	t.Setenv("ARCA_HOME", filepath.Join(dir, "arca"))
+	t.Setenv("HOME", filepath.Join(dir, "home"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "xdg"))
 
 	h := &harness{t: t, dir: dir, pass: "gaslight-tremor-unmasked-cufflink-shallot-pesky"}
@@ -114,11 +118,14 @@ func TestFullJourneyFromInitToRestore(t *testing.T) {
 	h := newHarness(t)
 	h.tree()
 
+	// With no argument init writes the user-wide config, so this also proves
+	// the later commands find it without -c and without an arca.toml here.
+	globalCfg := filepath.Join(os.Getenv(cli.HomeEnv), cli.ConfigFileName)
 	out := h.mustRun("init")
-	if !strings.Contains(out, cli.ConfigFileName) {
+	if !strings.Contains(out, globalCfg) {
 		t.Errorf("init did not report the file it created:\n%s", out)
 	}
-	if _, err := os.Stat(cli.ConfigFileName); err != nil {
+	if _, err := os.Stat(globalCfg); err != nil {
 		t.Fatalf("init wrote no config: %v", err)
 	}
 	// The generated config points at ~; replace it with the test tree.
@@ -371,4 +378,55 @@ func TestCircularSSHKeyDependencyIsWarnedAbout(t *testing.T) {
 	if !strings.Contains(out, "you lose the key and the backup together") {
 		t.Errorf("no warning about the circular dependency:\n%s", out)
 	}
+}
+
+// init now defaults to the user-wide directory, so where it writes — and what
+// it refuses to clobber — is worth pinning down on its own.
+func TestInitWritesWhereItIsTold(t *testing.T) {
+	t.Run("no argument writes the user-wide config", func(t *testing.T) {
+		h := newHarness(t)
+		want := filepath.Join(os.Getenv(cli.HomeEnv), cli.ConfigFileName)
+
+		h.mustRun("init")
+		info, err := os.Stat(want)
+		if err != nil {
+			t.Fatalf("init wrote nothing to %s: %v", want, err)
+		}
+		if got := info.Mode().Perm(); got != 0o644 {
+			t.Errorf("config mode is %o, want 644: it holds no secret", got)
+		}
+		// The directory is shared with identity.age, so it may not be loose.
+		dir, err := os.Stat(filepath.Dir(want))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := dir.Mode().Perm(); got != 0o700 {
+			t.Errorf("%s is mode %o, want 700: it holds key material", filepath.Dir(want), got)
+		}
+		// Nothing was left behind in the working directory.
+		if _, err := os.Stat(cli.ConfigFileName); err == nil {
+			t.Error("init also wrote a config into the working directory")
+		}
+
+		if _, err := h.run("init"); err == nil {
+			t.Error("a second init replaced the existing config")
+		}
+	})
+
+	t.Run("a directory argument gets the conventional name", func(t *testing.T) {
+		h := newHarness(t)
+		dir := filepath.Join(h.dir, "project")
+		h.mustRun("init", dir+string(filepath.Separator))
+		if _, err := os.Stat(filepath.Join(dir, cli.ConfigFileName)); err != nil {
+			t.Fatalf("init did not write into %s: %v", dir, err)
+		}
+	})
+
+	t.Run("a file argument is taken literally", func(t *testing.T) {
+		h := newHarness(t)
+		h.mustRun("init", "elsewhere.toml")
+		if _, err := os.Stat(filepath.Join(h.dir, "elsewhere.toml")); err != nil {
+			t.Fatalf("init did not honour the name given: %v", err)
+		}
+	})
 }

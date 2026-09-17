@@ -33,13 +33,31 @@ type KeyFlags struct {
 	GeneratePass   bool
 }
 
-// DefaultIdentityPath is ~/.config/arca/identity.age.
+// DefaultIdentityPath is where gen-key writes: ~/.arca/identity.age.
 func DefaultIdentityPath() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
+	dir := UserDir()
+	if dir == "" {
 		return ""
 	}
-	return filepath.Join(dir, "arca", DefaultIdentityName)
+	return filepath.Join(dir, DefaultIdentityName)
+}
+
+// FindIdentity returns the first default identity that exists — the current
+// location, then the one arca used before ~/.arca — or "" when there is none.
+//
+// Writing goes to one place and reading looks in two, deliberately: an upgrade
+// must never turn an archive into something nobody can open.
+func FindIdentity() string {
+	for _, dir := range []string{UserDir(), legacyUserDir()} {
+		if dir == "" {
+			continue
+		}
+		p := filepath.Join(dir, DefaultIdentityName)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
 }
 
 // EncryptKeyring assembles the key material for writing an archive.
@@ -109,12 +127,10 @@ func (k *KeyFlags) DecryptKeyring(out io.Writer) (*codec.Keyring, bool, error) {
 		return &codec.Keyring{Passphrase: pass}, false, nil
 	}
 
-	if p := DefaultIdentityPath(); p != "" {
-		if _, err := os.Stat(p); err == nil {
-			fmt.Fprintf(out, "%s %s\n", StyleMuted.Render("Trying identity:"), p)
-			// A guess, so the caller may fall back to a passphrase.
-			return &codec.Keyring{IdentityFiles: []string{p}}, true, nil
-		}
+	if p := FindIdentity(); p != "" {
+		fmt.Fprintf(out, "%s %s\n", StyleMuted.Render("Trying identity:"), p)
+		// A guess, so the caller may fall back to a passphrase.
+		return &codec.Keyring{IdentityFiles: []string{p}}, true, nil
 	}
 	pass, err := promptPassphrase(out, false)
 	if err != nil {
