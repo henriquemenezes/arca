@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -26,9 +27,12 @@ func (m *model) viewMenu() string {
 	head.WriteString(header("What would you like to do?", "menu"))
 
 	var foot strings.Builder
-	if m.fromDisk {
+	switch {
+	case m.fromDisk:
 		foot.WriteString("\n" + stMuted.Render("Using "+m.cfgPath+" — backup will start from its review screen.") + "\n")
-	} else {
+	case m.hasConfig():
+		foot.WriteString("\n" + stMuted.Render("Using the configuration built in this session, which is not saved.") + "\n")
+	default:
 		foot.WriteString("\n" + stMuted.Render("No arca.toml found; you will pick what to back up.") + "\n")
 	}
 	if m.notice != "" {
@@ -179,10 +183,17 @@ func (m *model) viewReview() string {
 	var b strings.Builder
 	b.WriteString(header("Review", "backup › review"))
 
+	// A plan that could not be built is the moment the configuration most needs
+	// changing — a source was renamed, or deleted — so the two ways to change it
+	// have to be reachable from here too.
 	if m.plan == nil {
+		b.WriteString(m.viewConfigSummary())
 		b.WriteString(stMuted.Render("  Nothing planned yet.") + "\n")
-		return b.String() + help("esc back")
+		return b.String() + help("e edit this configuration", "n new configuration",
+			"esc back", "q quit")
 	}
+
+	b.WriteString(m.viewConfigSummary())
 
 	b.WriteString(stTitle.Render("Mapping") + "\n")
 	for _, s := range m.plan.Sources {
@@ -222,7 +233,92 @@ func (m *model) viewReview() string {
 	if m.notice != "" {
 		b.WriteString("\n" + stWarn.Render("! "+m.notice) + "\n")
 	}
-	return b.String() + help("enter start the backup", "esc back", "q quit")
+	return b.String() + help("enter start the backup", "e edit this configuration",
+		"n new configuration", "esc back", "q quit")
+}
+
+// viewConfigSummary names the configuration under review and what each of its
+// groups holds. Without it the review shows what would happen but never which
+// file said so, and "edit this configuration" would be an offer to change
+// something the screen never identified.
+func (m *model) viewConfigSummary() string {
+	if m.cfg == nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(stTitle.Render("Configuration") + "\n")
+	if m.fromDisk && m.cfgPath != "" {
+		b.WriteString("  " + stKey.Render(shorten(m.cfgPath, m.width-6)) + "\n")
+	} else {
+		b.WriteString("  " + stMuted.Render("built in this session, not saved") + "\n")
+	}
+	for _, g := range m.cfg.Groups {
+		line := fmt.Sprintf("  %s %s", stKey.Render(padRight(groupLabel(g.Name), 14)),
+			stMuted.Render(cli.Count(len(g.Sources), "source", "sources")))
+		if n := len(g.Exclude); n > 0 {
+			line += stMuted.Render(" · " + cli.Count(n, "exclude pattern", "exclude patterns"))
+		}
+		b.WriteString(line + "\n")
+	}
+	return b.String() + "\n"
+}
+
+// groupLabel names a group that reached the archive root, where dest and, with
+// it, the usual name are both empty.
+func groupLabel(name string) string {
+	if name == "" {
+		return "(archive root)"
+	}
+	return name
+}
+
+func (m *model) viewSaveConfig() string {
+	var b strings.Builder
+	b.WriteString(header("Save this configuration?", "backup › configuration"))
+	b.WriteString("  " + m.cfgInput.View() + "\n\n")
+	if list := m.cfgInput.ViewList(m.width, m.pathListRows()); list != "" {
+		b.WriteString(list + "\n")
+	}
+
+	path, err := cli.ResolveConfigPath(strings.TrimSpace(m.cfgInput.Value()))
+	if err == nil {
+		if _, statErr := os.Stat(path); statErr == nil {
+			if m.confirmSave == path {
+				b.WriteString(stWarn.Render("  Press enter again to replace "+shorten(path, m.width-30)) + "\n")
+			} else {
+				b.WriteString(stWarn.Render("  A configuration is already there; saving replaces it.") + "\n")
+			}
+			// The shipped arca.toml is mostly comments, and they are the one
+			// thing a round trip through this interface cannot carry.
+			b.WriteString(stMuted.Render("  Comments in the existing file are not carried over.") + "\n")
+		}
+	}
+
+	b.WriteString("\n" + stTitle.Render("What would be written") + "\n")
+	b.WriteString(m.previewTOML())
+	return b.String() + help("tab complete", "↑↓ pick", "enter save",
+		"ctrl+d continue without saving", "esc back")
+}
+
+// previewTOML shows as much of the rendered file as the terminal has room for.
+// The point is to make "replaces it" concrete before the second enter, so what
+// matters is the top of the file, not all of it.
+func (m *model) previewTOML() string {
+	if m.cfg == nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(m.renderTOML(m.cfg), "\n"), "\n")
+	rows := maxInt(3, m.height-20)
+
+	var b strings.Builder
+	for i, line := range lines {
+		if i == rows {
+			b.WriteString("    " + stCrumb.Render(fmt.Sprintf("+%d more", len(lines)-rows)) + "\n")
+			break
+		}
+		b.WriteString("    " + stMuted.Render(shorten(line, m.width-8)) + "\n")
+	}
+	return b.String()
 }
 
 func (m *model) viewRunning() string {

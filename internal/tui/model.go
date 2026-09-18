@@ -30,6 +30,7 @@ const (
 	stateRecipients
 	stateOutput
 	stateReview
+	stateSaveConfig
 	stateRunning
 	stateDone
 	statePickArchive
@@ -41,16 +42,36 @@ const (
 	stateGenerated
 )
 
+// cfgIntent says why the source and mapping screens are open, which is what
+// decides both what a finished mapping is built on top of and where it goes
+// next.
+type cfgIntent int
+
+const (
+	cfgFresh cfgIntent = iota // no configuration at all; the original flow
+	cfgEdit                   // reshaping the one the review screen showed
+	cfgNew                    // replacing it with one built from scratch
+)
+
 // mapEntry is one chosen source and the directory it lands in inside the
 // archive. Member previews the final name, which is what makes the mapping
 // concrete while the user is still deciding.
+//
+// as carries an alias read from a configuration file. The mapping screen does
+// not offer a way to set one — resolving a basename collision is rare enough to
+// belong in the file — but it must survive being edited here, or opening the
+// interface would break the archive layout the alias exists to fix.
 type mapEntry struct {
 	path string
 	dest string
+	as   string
 }
 
 func (m mapEntry) member() string {
-	base := filepath.Base(m.path)
+	base := m.as
+	if base == "" {
+		base = filepath.Base(m.path)
+	}
 	if m.dest == "" {
 		return base
 	}
@@ -69,6 +90,20 @@ type model struct {
 	cfgTOML  string
 	fromDisk bool
 
+	// intentCfg is why the source and mapping screens are open; base is what a
+	// configuration built there inherits its settings from. Together they are
+	// what keeps editing from quietly resetting everything the mapping screen
+	// never asks about.
+	intentCfg cfgIntent
+	base      *config.Config
+
+	// destName and destExclude remember, per destination, what a configuration
+	// file said about the group that owned it. The mapping screen works in
+	// destinations, so this is how a group keeps its name and its exclude
+	// patterns across an edit.
+	destName    map[string]string
+	destExclude map[string][]string
+
 	browser  browser
 	mapping  []mapEntry
 	mapIndex int
@@ -83,7 +118,13 @@ type model struct {
 	rcptInput   textinput.Model
 	outInput    pathInput
 	targetInput pathInput
+	cfgInput    pathInput
 	passStage   int
+
+	// confirmSave is the path the first enter asked about, when that path
+	// already holds a configuration. Only an enter on the same path again
+	// replaces it, so editing the field after being warned starts over.
+	confirmSave string
 
 	plan     *archive.PlanResult
 	keyring  *codec.Keyring
@@ -160,6 +201,7 @@ func newModel() *model {
 		rcptInput:   mk("age1…  (comma or space separated)", 60),
 		outInput:    newPathInput(".", 60),
 		targetInput: newPathInput("./restored", 60),
+		cfgInput:    newPathInput(cli.ConfigFileName, 60),
 	}
 	m.passInput = mk("passphrase", 48)
 	m.passInput.EchoMode = textinput.EchoPassword
@@ -172,6 +214,7 @@ func newModel() *model {
 		if data, readErr := os.ReadFile(path); readErr == nil {
 			if cfg, parseErr := config.Parse(data); parseErr == nil {
 				m.cfg, m.cfgPath, m.cfgTOML, m.fromDisk = cfg, path, string(data), true
+				m.adoptConfig(cfg)
 			}
 		}
 	}
@@ -199,6 +242,62 @@ func (m *model) pop() {
 }
 
 func (m *model) fail(err error) { m.err = err }
+
+// returnToReview lands on the review with a back stack that leads straight to
+// the menu. Popping instead would walk back through the screens that built the
+// configuration, and re-entering them from behind is not what esc means here.
+func (m *model) returnToReview() tea.Cmd {
+	m.state, m.back, m.err = stateReview, []state{stateMenu}, nil
+	return m.refreshPlan()
+}
+
+// hasConfig reports whether there is something to review: a configuration read
+// from disk, or one built earlier in this session and not yet saved.
+func (m *model) hasConfig() bool { return m.cfg != nil && len(m.cfg.Groups) > 0 }
+
+// adoptConfig takes a configuration as the one being worked on: what the
+// mapping screen will inherit, and what it must hand back untouched.
+//
+// Two groups may share a destination — nothing forbids it, since only the names
+// have to be unique — and the mapping screen cannot tell them apart, so they
+// merge: the first name wins and the exclude patterns are unioned.
+func (m *model) adoptConfig(cfg *config.Config) {
+	m.base = cfg
+	m.destName = map[string]string{}
+	m.destExclude = map[string][]string{}
+	for _, g := range cfg.Groups {
+		if _, seen := m.destName[g.Dest]; !seen {
+			m.destName[g.Dest] = g.Name
+		}
+		m.destExclude[g.Dest] = appendUnique(m.destExclude[g.Dest], g.Exclude)
+	}
+}
+
+// seedMapping fills the mapping screen from a configuration, keeping each path
+// spelled the way the file spells it so that a "~/" survives a round trip.
+func (m *model) seedMapping(cfg *config.Config) {
+	m.mapping = m.mapping[:0]
+	for _, g := range cfg.Groups {
+		for _, s := range g.Sources {
+			m.mapping = append(m.mapping, mapEntry{path: s.Path, dest: g.Dest, as: s.As})
+		}
+	}
+	m.mapIndex = 0
+}
+
+func appendUnique(dst, add []string) []string {
+	seen := make(map[string]bool, len(dst))
+	for _, v := range dst {
+		seen[v] = true
+	}
+	for _, v := range add {
+		if !seen[v] {
+			seen[v] = true
+			dst = append(dst, v)
+		}
+	}
+	return dst
+}
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -262,6 +361,8 @@ func (m *model) View() string {
 		body = m.viewOutput()
 	case stateReview:
 		body = m.viewReview()
+	case stateSaveConfig:
+		body = m.viewSaveConfig()
 	case stateRunning:
 		body = m.viewRunning()
 	case stateDone:
@@ -347,22 +448,44 @@ func splitRecipients(s string) []string {
 
 // buildConfig turns the browser selection into the same Config the CLI builds
 // from a file, so both front-ends converge before anything runs.
+//
+// It inherits rather than defaults. The mapping screen only ever asks about
+// sources and destinations, so everything else — the settings, the recipients,
+// the group names, the exclude patterns — has to come back out of whatever the
+// selection is being built on top of. Starting from Default() instead would
+// make editing a configuration a silent way to lose most of it.
 func (m *model) buildConfig() (*config.Config, error) {
-	cfg := config.Default()
+	base := m.base
+	if base == nil {
+		base = config.Default()
+	}
+	cfg := &config.Config{
+		Settings:   base.Settings,
+		Encryption: config.Encryption{Recipients: append([]string(nil), base.Encryption.Recipients...)},
+	}
+
 	byDest := map[string][]config.Source{}
 	var order []string
 	for _, e := range m.mapping {
 		if _, seen := byDest[e.dest]; !seen {
 			order = append(order, e.dest)
 		}
-		byDest[e.dest] = append(byDest[e.dest], config.Source{Path: e.path})
+		byDest[e.dest] = append(byDest[e.dest], config.Source{Path: e.path, As: e.as})
 	}
 	for i, dest := range order {
-		name := dest
+		name := m.destName[dest]
+		if name == "" {
+			name = dest
+		}
 		if name == "" {
 			name = fmt.Sprintf("group-%d", i+1)
 		}
-		cfg.Groups = append(cfg.Groups, config.Group{Name: name, Dest: dest, Sources: byDest[dest]})
+		cfg.Groups = append(cfg.Groups, config.Group{
+			Name:    name,
+			Dest:    dest,
+			Sources: byDest[dest],
+			Exclude: append([]string(nil), m.destExclude[dest]...),
+		})
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -370,12 +493,21 @@ func (m *model) buildConfig() (*config.Config, error) {
 	return cfg, nil
 }
 
-// renderTOML writes the selection back out as a config file, so a session spent
-// in the interface is not lost.
+// renderTOML writes the configuration back out as a config file, so a session
+// spent in the interface is not lost.
+//
+// Every field Config holds is written, including the ones no screen asks about.
+// This text can replace a file the user wrote by hand, and a rendering that
+// dropped a key would turn saving into a way to lose an exclude pattern or a
+// thread count. Comments are the one thing that cannot survive, which is why
+// the screen that writes this says so.
 func (m *model) renderTOML(cfg *config.Config) string {
 	var b strings.Builder
 	b.WriteString("# written by arca's interactive interface\n\n[settings]\n")
 	fmt.Fprintf(&b, "compression     = %q\n", cfg.Settings.Compression)
+	fmt.Fprintf(&b, "compressor      = %q\n", cfg.Settings.Compressor)
+	fmt.Fprintf(&b, "cipher          = %q\n", cfg.Settings.Cipher)
+	fmt.Fprintf(&b, "threads         = %d\n", cfg.Settings.Threads)
 	fmt.Fprintf(&b, "follow_symlinks = %v\n", cfg.Settings.FollowSymlinks)
 	fmt.Fprintf(&b, "one_filesystem  = %v\n\n[encryption]\n", cfg.Settings.OneFilesystem)
 	if len(cfg.Encryption.Recipients) == 0 {
@@ -390,9 +522,21 @@ func (m *model) renderTOML(cfg *config.Config) string {
 	for _, g := range cfg.Groups {
 		fmt.Fprintf(&b, "\n[[group]]\nname    = %q\ndest    = %q\nsources = [\n", g.Name, g.Dest)
 		for _, s := range g.Sources {
-			fmt.Fprintf(&b, "  %q,\n", s.Path)
+			path := contractHome(s.Path)
+			if s.As == "" {
+				fmt.Fprintf(&b, "  %q,\n", path)
+				continue
+			}
+			fmt.Fprintf(&b, "  { path = %q, as = %q },\n", path, s.As)
 		}
 		b.WriteString("]\n")
+		if len(g.Exclude) > 0 {
+			b.WriteString("exclude = [\n")
+			for _, e := range g.Exclude {
+				fmt.Fprintf(&b, "  %q,\n", e)
+			}
+			b.WriteString("]\n")
+		}
 	}
 	return b.String()
 }

@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -47,6 +50,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyUp}
 	case "down":
 		return tea.KeyMsg{Type: tea.KeyDown}
+	case "ctrl+d":
+		return tea.KeyMsg{Type: tea.KeyCtrlD}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
@@ -423,7 +428,7 @@ func TestInterfaceProducesARealArchive(t *testing.T) {
 func TestEveryScreenRenders(t *testing.T) {
 	states := []state{
 		stateMenu, stateSources, stateMapping, stateCrypto, statePassphrase,
-		stateRecipients, stateOutput, stateReview, stateRunning, stateDone,
+		stateRecipients, stateOutput, stateReview, stateSaveConfig, stateRunning, stateDone,
 		statePickArchive, stateArchiveKey, stateArchiveInfo, stateRestoreTarget,
 		stateRestoring, stateRestoreDone, stateGenerated,
 	}
@@ -438,5 +443,400 @@ func TestEveryScreenRenders(t *testing.T) {
 				t.Errorf("state %v at width %d rendered nothing", s, width)
 			}
 		}
+	}
+}
+
+// ---------- reviewing, editing and saving a configuration ----------
+
+// configFixture writes a configuration exercising every field the mapping
+// screen never asks about, over source directories that really exist so the
+// plan can be built from it.
+func configFixture(t *testing.T) (root string, cfg *config.Config, body string) {
+	t.Helper()
+	root = t.TempDir()
+	for _, dir := range []string{".ssh", ".aws", "Work", "config/nvim", "share/nvim"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	body = fmt.Sprintf(`[settings]
+compression     = "fastest"
+compressor      = "zstd"
+cipher          = "age"
+threads         = 4
+follow_symlinks = true
+one_filesystem  = false
+
+[encryption]
+recipients = ["age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"]
+
+[[group]]
+name    = "dotfiles"
+dest    = "dotfiles"
+sources = [
+  %q,
+  %q,
+  { path = %q, as = "nvim-config" },
+  { path = %q, as = "nvim-data" },
+]
+exclude = ["**/known_hosts.old", "*.tmp"]
+
+[[group]]
+name    = "projects"
+dest    = "Work"
+sources = [%q]
+exclude = ["**/node_modules"]
+`,
+		filepath.Join(root, ".ssh"),
+		filepath.Join(root, ".aws"),
+		filepath.Join(root, "config/nvim"),
+		filepath.Join(root, "share/nvim"),
+		filepath.Join(root, "Work"))
+
+	cfg, err := config.Parse([]byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	return root, cfg, body
+}
+
+// reviewing returns a model sitting on the review screen with a configuration
+// in hand, the way the menu leaves it when an arca.toml was found.
+func reviewing(t *testing.T) (*model, string) {
+	t.Helper()
+	root, cfg, body := configFixture(t)
+
+	m := newModel()
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.cfg, m.cfgTOML, m.cfgPath, m.fromDisk = cfg, body, filepath.Join(root, "arca.toml"), true
+	m.adoptConfig(cfg)
+	m.state = stateReview
+	m.back = []state{stateMenu}
+	return m, root
+}
+
+// Editing has to start from what the configuration already says, or it is not
+// editing — it is being asked the same questions over again.
+func TestReviewEditStartsFromTheCurrentConfiguration(t *testing.T) {
+	m, _ := reviewing(t)
+
+	send(m, "e")
+	if m.state != stateSources {
+		t.Fatalf("state = %v, want sources", m.state)
+	}
+	if m.intentCfg != cfgEdit {
+		t.Errorf("intent = %v, want cfgEdit", m.intentCfg)
+	}
+
+	if len(m.browser.selected) != 5 {
+		t.Errorf("browser marks %d paths, want the 5 the configuration names", len(m.browser.selected))
+	}
+	for _, g := range m.cfg.Groups {
+		for _, src := range g.Sources {
+			abs, err := config.ExpandPath(src.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !m.browser.selected[abs] {
+				t.Errorf("%s is in the configuration but not marked in the browser", abs)
+			}
+		}
+	}
+
+	dests := map[string]string{}
+	aliases := map[string]string{}
+	for _, e := range m.mapping {
+		dests[filepath.Base(e.path)] = e.dest
+		if e.as != "" {
+			aliases[e.path] = e.as
+		}
+	}
+	if dests[".ssh"] != "dotfiles" || dests["Work"] != "Work" {
+		t.Errorf("mapping did not inherit the destinations: %+v", dests)
+	}
+	if len(aliases) != 2 {
+		t.Errorf("aliases lost on the way into the mapping screen: %+v", aliases)
+	}
+}
+
+// "New" is the opposite offer: nothing carried over, including the settings.
+func TestReviewNewStartsFromNothing(t *testing.T) {
+	m, _ := reviewing(t)
+
+	send(m, "n")
+	if m.state != stateSources {
+		t.Fatalf("state = %v, want sources", m.state)
+	}
+	if m.intentCfg != cfgNew {
+		t.Errorf("intent = %v, want cfgNew", m.intentCfg)
+	}
+	if len(m.browser.selected) != 0 || len(m.mapping) != 0 {
+		t.Errorf("a new configuration started with %d marks and %d mapped entries",
+			len(m.browser.selected), len(m.mapping))
+	}
+	if m.base.Settings.Threads != config.Default().Settings.Threads {
+		t.Errorf("a new configuration inherited the old settings: %+v", m.base.Settings)
+	}
+	if len(m.base.Encryption.Recipients) != 0 {
+		t.Errorf("a new configuration inherited the old recipients: %v", m.base.Encryption.Recipients)
+	}
+}
+
+// The mapping screen asks about sources and destinations and nothing else, so
+// everything else has to come back out of an edit untouched. Losing an exclude
+// pattern here would quietly put node_modules in the archive.
+func TestEditingKeepsWhatTheMappingScreenNeverAsks(t *testing.T) {
+	m, _ := reviewing(t)
+	before := m.cfg
+
+	send(m, "e")   // review  → sources, already marked
+	send(m, "tab") // sources → mapping, destinations inherited
+	send(m, "tab") // mapping → save screen
+	if m.state != stateSaveConfig {
+		t.Fatalf("state = %v (err %v), want the save screen", m.state, m.err)
+	}
+
+	got := m.cfg
+	if got.Settings != before.Settings {
+		t.Errorf("settings changed across an edit:\n got %+v\nwant %+v", got.Settings, before.Settings)
+	}
+	if len(got.Encryption.Recipients) != 1 || got.Encryption.Recipients[0] != before.Encryption.Recipients[0] {
+		t.Errorf("recipients changed across an edit: %v", got.Encryption.Recipients)
+	}
+
+	excludes := map[string][]string{}
+	names := map[string]string{}
+	for _, g := range got.Groups {
+		excludes[g.Dest] = g.Exclude
+		names[g.Dest] = g.Name
+	}
+	if len(excludes["dotfiles"]) != 2 || len(excludes["Work"]) != 1 {
+		t.Errorf("exclude patterns lost across an edit: %+v", excludes)
+	}
+	if names["Work"] != "projects" {
+		t.Errorf("group name lost across an edit: %q, want %q", names["Work"], "projects")
+	}
+
+	// The aliases are what keep the two nvim directories apart in the archive.
+	members := map[string]bool{}
+	resolved, err := got.Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range resolved {
+		members[r.Member] = true
+	}
+	if !members["dotfiles/nvim-config"] || !members["dotfiles/nvim-data"] {
+		t.Errorf("aliases lost across an edit: %v", members)
+	}
+}
+
+// Walking back to the browser and forward again must not throw away the
+// destinations already decided, whether they were typed or inherited.
+func TestSourceReselectionKeepsChosenDestinations(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "Pictures"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	m := newModel()
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.state = stateSources
+	m.browser = newBrowser(root)
+
+	send(m, " ", "tab")
+	if m.state != stateMapping {
+		t.Fatalf("state = %v, want mapping", m.state)
+	}
+
+	send(m, "e")
+	m.destInput.SetValue("media")
+	send(m, "enter")
+	if m.mapping[0].dest != "media" {
+		t.Fatalf("dest = %q, want media", m.mapping[0].dest)
+	}
+
+	send(m, "esc") // back to the browser
+	send(m, "tab") // and forward again
+	if m.state != stateMapping {
+		t.Fatalf("state = %v, want mapping", m.state)
+	}
+	if m.mapping[0].dest != "media" {
+		t.Errorf("dest = %q after a trip back through the browser, want media", m.mapping[0].dest)
+	}
+}
+
+// What is written has to describe the whole configuration. This file can
+// replace one the user wrote by hand, so a dropped key is a silently weakened
+// backup rather than a cosmetic loss.
+func TestRenderedConfigKeepsEveryFieldConfigHolds(t *testing.T) {
+	_, cfg, _ := configFixture(t)
+
+	m := newModel()
+	body := m.renderTOML(cfg)
+	got, err := config.Parse([]byte(body))
+	if err != nil {
+		t.Fatalf("the interface wrote a config it cannot read back: %v\n%s", err, body)
+	}
+	if err := got.Validate(); err != nil {
+		t.Fatalf("written config does not validate: %v\n%s", err, body)
+	}
+
+	if got.Settings != cfg.Settings {
+		t.Errorf("settings:\n got %+v\nwant %+v\n%s", got.Settings, cfg.Settings, body)
+	}
+	if !reflect.DeepEqual(got.Encryption, cfg.Encryption) {
+		t.Errorf("encryption: got %+v, want %+v", got.Encryption, cfg.Encryption)
+	}
+	if !reflect.DeepEqual(got.Groups, cfg.Groups) {
+		t.Errorf("groups:\n got %+v\nwant %+v\n%s", got.Groups, cfg.Groups, body)
+	}
+}
+
+// An absolute path picked in the browser is written back as ~/ when it is under
+// the home directory, so a saved configuration is not pinned to one machine.
+func TestRenderedConfigWritesPathsRelativeToHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory in this environment")
+	}
+
+	m := newModel()
+	m.mapping = []mapEntry{
+		{path: filepath.Join(home, ".ssh"), dest: "dotfiles"},
+		{path: "/etc/hosts", dest: "system"},
+	}
+	cfg, err := m.buildConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := m.renderTOML(cfg)
+	if !strings.Contains(body, `"~/.ssh"`) {
+		t.Errorf("a path under home was not contracted to ~/:\n%s", body)
+	}
+	if !strings.Contains(body, `"/etc/hosts"`) {
+		t.Errorf("a path outside home should have been left alone:\n%s", body)
+	}
+}
+
+// Replacing a configuration the user wrote by hand takes two presses of enter,
+// because the first one is a question.
+func TestSavingOverAnExistingConfigurationAsksFirst(t *testing.T) {
+	m, root := reviewing(t)
+	path := filepath.Join(root, "arca.toml")
+	original := []byte("# hand written, do not lose me by accident\n")
+	if err := os.WriteFile(path, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m.state = stateSaveConfig
+	m.cfgInput.SetValue(path)
+
+	send(m, "enter")
+	if m.state != stateSaveConfig {
+		t.Fatalf("the first enter left the screen: state = %v", m.state)
+	}
+	if m.confirmSave != path {
+		t.Errorf("the first enter did not ask: confirmSave = %q", m.confirmSave)
+	}
+	if now, _ := os.ReadFile(path); !bytes.Equal(now, original) {
+		t.Fatalf("the first enter already replaced the file:\n%s", now)
+	}
+
+	send(m, "enter")
+	if m.state != stateReview {
+		t.Fatalf("state = %v (err %v), want review", m.state, m.err)
+	}
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(written, original) {
+		t.Fatal("the second enter did not write")
+	}
+	if _, err := config.Parse(written); err != nil {
+		t.Errorf("what was written does not parse: %v\n%s", err, written)
+	}
+	if m.cfgPath != path || !m.fromDisk {
+		t.Errorf("cfgPath = %q fromDisk = %v after saving", m.cfgPath, m.fromDisk)
+	}
+}
+
+// A path with nothing at it needs no confirmation, and the directory is arca's
+// own, shared with the identity, so it is created at 0700.
+func TestSavingToANewPathWritesStraightAway(t *testing.T) {
+	m, root := reviewing(t)
+	path := filepath.Join(root, "fresh", "arca.toml")
+
+	m.state = stateSaveConfig
+	m.cfgInput.SetValue(path)
+
+	send(m, "enter")
+	if m.state != stateReview {
+		t.Fatalf("state = %v (err %v), want review", m.state, m.err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("nothing was written: %v", err)
+	}
+	info, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o700 {
+		t.Errorf("directory mode = %04o, want 0700", perm)
+	}
+}
+
+// Skipping the save has to leave the disk exactly as it was, and stop the rest
+// of the interface claiming a file backs what it is about to run.
+func TestSkippingTheSaveLeavesTheDiskAlone(t *testing.T) {
+	m, root := reviewing(t)
+	path := filepath.Join(root, "arca.toml")
+	original := []byte("# untouched\n")
+	if err := os.WriteFile(path, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Drive the real route in, so the state the save screen inherits is the
+	// state an edit actually leaves behind.
+	send(m, "e", "tab", "tab")
+	if m.state != stateSaveConfig {
+		t.Fatalf("state = %v (err %v), want the save screen", m.state, m.err)
+	}
+	m.cfgInput.SetValue(path)
+
+	send(m, "ctrl+d")
+	if m.state != stateReview {
+		t.Fatalf("state = %v (err %v), want review", m.state, m.err)
+	}
+	if now, _ := os.ReadFile(path); !bytes.Equal(now, original) {
+		t.Errorf("the file was written anyway:\n%s", now)
+	}
+	if m.fromDisk {
+		t.Error("an unsaved configuration still claims a file backs it")
+	}
+	// It is still the configuration in hand, so the menu goes back to reviewing
+	// it rather than starting over.
+	if !m.hasConfig() {
+		t.Error("the edited configuration was dropped along with the save")
+	}
+}
+
+// esc out of an edit must not walk back through the screens that built it.
+func TestReturningFromAnEditLandsOnTheReview(t *testing.T) {
+	m, _ := reviewing(t)
+
+	send(m, "e", "tab", "tab", "ctrl+d")
+	if m.state != stateReview {
+		t.Fatalf("state = %v, want review", m.state)
+	}
+	send(m, "esc")
+	if m.state != stateMenu {
+		t.Errorf("esc from the review led to %v, want the menu", m.state)
 	}
 }

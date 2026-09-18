@@ -13,6 +13,7 @@ import (
 	"github.com/hamsa/arca/internal/archive"
 	"github.com/hamsa/arca/internal/cli"
 	"github.com/hamsa/arca/internal/codec"
+	"github.com/hamsa/arca/internal/config"
 	"github.com/hamsa/arca/internal/secret"
 )
 
@@ -39,6 +40,8 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyPath(msg, &m.outInput, m.acceptOutput)
 	case stateReview:
 		return m.keyReview(msg)
+	case stateSaveConfig:
+		return m.keySaveConfig(msg)
 	case stateDone, stateRestoreDone, stateGenerated:
 		return m.keyFinished(msg)
 	case statePickArchive:
@@ -70,11 +73,13 @@ func (m *model) keyMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *model) chooseMenu() (tea.Model, tea.Cmd) {
 	switch m.menu.Index() {
 	case 0: // back up
-		if m.fromDisk {
-			// The config already says what to capture; go straight to review.
+		if m.hasConfig() {
+			// Something already says what to capture — a file, or a session
+			// spent editing one — so go straight to its review.
 			m.push(stateReview)
 			return m, m.refreshPlan()
 		}
+		m.intentCfg = cfgFresh
 		m.push(stateSources)
 	case 1: // restore
 		m.intent = intentRestore
@@ -109,16 +114,50 @@ func (m *model) keySources(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.fail(errors.New("nothing selected yet: highlight a file or directory and press space"))
 			return m, nil
 		}
-		m.mapping = m.mapping[:0]
-		for _, p := range sel {
-			m.mapping = append(m.mapping, mapEntry{path: p, dest: suggestDest(p)})
-		}
+		m.mapping = rebuildMapping(m.mapping, sel)
 		m.mapIndex = 0
 		m.push(stateMapping)
 		return m, nil
 	}
 	m.browser.Update(msg)
 	return m, nil
+}
+
+// rebuildMapping reconciles the browser's selection with the mapping already in
+// hand: a path that was there keeps the destination it was given, and only a
+// genuinely new one is guessed at.
+//
+// Keeping them matters twice over. It is what lets an edit start from what the
+// configuration file says, and it is what stops a trip back to the browser from
+// resetting every destination the user typed on the way forward.
+func rebuildMapping(prev []mapEntry, selected []string) []mapEntry {
+	known := make(map[string]mapEntry, len(prev))
+	for _, e := range prev {
+		known[e.path] = e
+	}
+	// The browser hands back absolute paths; a configuration file may spell the
+	// same place with a "~/". Both have to find each other, and the spelling
+	// already in hand is the one worth keeping.
+	byAbs := make(map[string]mapEntry, len(prev))
+	for _, e := range prev {
+		if abs, err := config.ExpandPath(e.path); err == nil {
+			byAbs[abs] = e
+		}
+	}
+
+	out := make([]mapEntry, 0, len(selected))
+	for _, p := range selected {
+		if e, ok := known[p]; ok {
+			out = append(out, e)
+			continue
+		}
+		if e, ok := byAbs[p]; ok {
+			out = append(out, e)
+			continue
+		}
+		out = append(out, mapEntry{path: p, dest: suggestDest(p)})
+	}
+	return out
 }
 
 // suggestDest proposes a destination that matches how people usually group
@@ -182,8 +221,17 @@ func (m *model) keyMapping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.fail(err)
 			return m, nil
 		}
-		m.cfg, m.cfgTOML, m.fromDisk = cfg, "", false
-		m.push(stateCrypto)
+		// The rendered text is what the archive manifest records, so it has to
+		// describe the configuration that actually produced the archive.
+		// Whatever file this started from, it no longer says this. cfgPath is
+		// left alone: it is where the configuration came from, and so the
+		// obvious place to offer to write it back to.
+		m.cfg, m.cfgTOML, m.fromDisk = cfg, m.renderTOML(cfg), false
+		if m.intentCfg == cfgFresh {
+			m.push(stateCrypto)
+			return m, nil
+		}
+		return m, m.toSaveConfig()
 	}
 	return m, nil
 }
@@ -365,6 +413,10 @@ func (m *model) keyReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.pop()
 	case "q":
 		return m, tea.Quit
+	case "e":
+		return m, m.editConfig()
+	case "n":
+		return m, m.newConfig()
 	case "enter":
 		if m.plan == nil {
 			m.fail(errors.New("nothing to back up"))
@@ -399,6 +451,112 @@ func (m *model) keyReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// editConfig reopens the guided flow on the configuration under review, with
+// the browser already marking what it captures and the mapping screen already
+// holding each destination. Everything the flow never asks about is carried on
+// m.base, so what comes back out is the same configuration minus the changes.
+func (m *model) editConfig() tea.Cmd {
+	if m.cfg == nil {
+		m.fail(errors.New("there is no configuration to edit"))
+		return nil
+	}
+	m.intentCfg = cfgEdit
+	m.adoptConfig(m.cfg)
+	m.seedMapping(m.cfg)
+
+	home, _ := os.UserHomeDir()
+	m.browser = newBrowser(home)
+	for _, e := range m.mapping {
+		abs, err := config.ExpandPath(e.path)
+		if err != nil {
+			continue
+		}
+		// A source that has since been deleted still belongs to the
+		// configuration; it is the plan's job to report it missing, not this
+		// screen's job to drop it.
+		m.browser.selected[abs] = true
+	}
+	m.push(stateSources)
+	return nil
+}
+
+// newConfig starts over: nothing selected, nothing inherited, and the built-in
+// defaults underneath.
+func (m *model) newConfig() tea.Cmd {
+	m.intentCfg = cfgNew
+	m.adoptConfig(config.Default())
+	m.mapping = m.mapping[:0]
+	m.mapIndex = 0
+
+	home, _ := os.UserHomeDir()
+	m.browser = newBrowser(home)
+	m.push(stateSources)
+	return nil
+}
+
+// ---------- backup: saving the configuration ----------
+
+// saveTarget is where a configuration would be written if it were saved now:
+// back over the file it came from, or arca's own directory when it has none.
+func (m *model) saveTarget() string {
+	if m.cfgPath != "" {
+		return m.cfgPath
+	}
+	path, err := cli.ResolveConfigPath("")
+	if err != nil {
+		return cli.ConfigFileName
+	}
+	return path
+}
+
+func (m *model) toSaveConfig() tea.Cmd {
+	m.cfgInput.SetValue(m.saveTarget())
+	m.cfgInput.CursorEnd()
+	m.confirmSave = ""
+	m.push(stateSaveConfig)
+	return m.cfgInput.Focus()
+}
+
+// keySaveConfig is keyPath's shape with one key more. Writing over a file the
+// user wrote by hand is worth two presses of enter, and skipping the write
+// entirely has to be reachable, since a configuration is worth trying before it
+// is worth keeping.
+func (m *model) keySaveConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.cfgInput.Blur()
+		m.pop()
+		return m, nil
+
+	case "ctrl+d":
+		// Used for this run only. Nothing on disk is touched, and fromDisk is
+		// already false, so nothing claims a file backs what is about to run.
+		m.cfgInput.Blur()
+		m.notice = "Not saved — this configuration is used for this run only."
+		return m, m.returnToReview()
+
+	case "enter":
+		path, err := cli.ResolveConfigPath(strings.TrimSpace(m.cfgInput.Value()))
+		if err != nil {
+			m.fail(err)
+			return m, nil
+		}
+		if _, statErr := os.Stat(path); statErr == nil && m.confirmSave != path {
+			m.confirmSave = path
+			m.err = nil
+			return m, nil
+		}
+		if err := m.writeConfig(path, true); err != nil {
+			m.fail(err)
+			return m, nil
+		}
+		m.cfgInput.Blur()
+		return m, m.returnToReview()
+	}
+
+	return m, m.cfgInput.Update(msg)
+}
+
 // ---------- finished screens ----------
 
 func (m *model) keyFinished(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -411,7 +569,13 @@ func (m *model) keyFinished(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "s":
 		if m.state == stateDone && !m.fromDisk {
-			if err := m.saveConfig(); err != nil {
+			path, err := cli.ResolveConfigPath("")
+			if err != nil {
+				m.fail(err)
+				return m, nil
+			}
+			// This screen has nowhere to ask, so it never replaces anything.
+			if err := m.writeConfig(path, false); err != nil {
 				m.fail(err)
 			}
 		}
@@ -419,13 +583,14 @@ func (m *model) keyFinished(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) saveConfig() error {
-	path, err := cli.ResolveConfigPath("")
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("%s already exists; not replacing it", path)
+// writeConfig renders the configuration in hand to path. replace is the
+// caller's answer to a file already being there: the save screen asks the user
+// and says yes, the done screen has no room to ask and says no.
+func (m *model) writeConfig(path string, replace bool) error {
+	if !replace {
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Errorf("%s already exists; not replacing it", path)
+		}
 	}
 	// 0700 on the directory: it is shared with identity.age.
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -435,8 +600,9 @@ func (m *model) saveConfig() error {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		return err
 	}
+	m.cfgTOML, m.cfgPath, m.fromDisk = body, path, true
+	m.confirmSave = ""
 	m.notice = "Saved " + path + " — next time `arca backup` reuses it."
-	m.fromDisk = true
 	return nil
 }
 

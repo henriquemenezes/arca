@@ -315,6 +315,28 @@ func expandHome(p string) string {
 	return out
 }
 
+// contractHome is expandHome read backwards: it puts the "~/" back.
+//
+// The browser deals in absolute paths, so a source picked there comes out as
+// /home/u/.ssh even when the configuration being edited spelled it ~/.ssh.
+// Writing that back would pin the file to one machine and one user name, which
+// is precisely what a backup config should not be.
+func contractHome(p string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || !filepath.IsAbs(p) {
+		return p
+	}
+	sep := string(filepath.Separator)
+	home = strings.TrimSuffix(home, sep)
+	if p == home {
+		return "~"
+	}
+	if rest, ok := strings.CutPrefix(p, home+sep); ok {
+		return "~" + sep + rest
+	}
+	return p
+}
+
 // commonPrefix is how far the candidates agree, in whole runes.
 func commonPrefix(ss []string) string {
 	if len(ss) == 0 {

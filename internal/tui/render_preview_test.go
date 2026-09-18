@@ -72,8 +72,25 @@ func TestRenderPreview(t *testing.T) {
 				t.Fatal(err)
 			}
 			m.cfg = cfg
+			m.cfgPath, m.fromDisk = "/home/u/.arca/arca.toml", true
+			m.cfg.Groups[0].Exclude = []string{"**/known_hosts.old"}
 			m.outPath = "/home/u/backups/arca-omarchy-2026-09-13T14-30-05Z.tar.zst.age"
 			m.refreshPlan()
+		})},
+		{"save configuration", mk(stateSaveConfig, func(m *model) {
+			m.mapping = []mapEntry{
+				{path: filepath.Join(home, ".ssh"), dest: "dotfiles"},
+				{path: filepath.Join(home, "Downloads"), dest: "Downloads"},
+			}
+			cfg, err := m.buildConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg.Groups[0].Exclude = []string{"**/known_hosts.old"}
+			m.cfg = cfg
+			existing := filepath.Join(home, "arca.toml")
+			os.WriteFile(existing, []byte("# hand written\n"), 0o644)
+			m.cfgInput.SetValue(existing)
 		})},
 		{"running", mk(stateRunning, func(m *model) {
 			m.plan = &archive.PlanResult{Stats: manifest.Stats{Files: 412, Bytes: 900000}}
