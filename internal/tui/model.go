@@ -126,8 +126,17 @@ type model struct {
 	// replaces it, so editing the field after being warned starts over.
 	confirmSave string
 
-	plan     *archive.PlanResult
-	keyring  *codec.Keyring
+	plan *archive.PlanResult
+
+	// backupKey encrypts an archive being written; archiveKey opens one being
+	// read. They are separate fields because they are separate secrets, chosen
+	// on different screens and meaning different things. One field for both let
+	// the passphrase typed to inspect somebody's archive become the passphrase
+	// a later backup was encrypted with, silently and without a screen ever
+	// asking.
+	backupKey  *codec.Keyring
+	archiveKey *codec.Keyring
+
 	genPass  string
 	outPath  string
 	bar      progress.Model
@@ -242,6 +251,26 @@ func (m *model) pop() {
 }
 
 func (m *model) fail(err error) { m.err = err }
+
+// endRun forgets everything that belonged to the run just finished, so the next
+// one starts from the menu rather than from the leftovers of the last.
+//
+// The keys are the reason this exists. A key that outlives its run is a key no
+// screen asked about: the next backup would be encrypted with whatever was last
+// typed, and the user could not tell from any screen which secret opens which
+// archive. The output path goes with them — reusing it would name an archive
+// that already exists, which the writer refuses — and so does the generated
+// passphrase, which has already been shown its one time.
+//
+// The configuration is deliberately kept: it is what the user described, not
+// what one run did with it.
+func (m *model) endRun() {
+	m.backupKey, m.archiveKey = nil, nil
+	m.genPass = ""
+	m.outPath = ""
+	m.plan, m.result, m.restored, m.info = nil, nil, nil, nil
+	m.lastProg = archive.Progress{}
+}
 
 // returnToReview lands on the review with a back stack that leads straight to
 // the menu. Popping instead would walk back through the screens that built the

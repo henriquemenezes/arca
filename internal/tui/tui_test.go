@@ -387,7 +387,7 @@ func TestInterfaceProducesARealArchive(t *testing.T) {
 	}
 	m.cfg = cfg
 	m.outPath = filepath.Join(out, "from-tui.tar.zst.age")
-	m.keyring = &codec.Keyring{Passphrase: []byte("gaslight-tremor-unmasked-cufflink-shallot")}
+	m.backupKey = &codec.Keyring{Passphrase: []byte("gaslight-tremor-unmasked-cufflink-shallot")}
 
 	if cmd := m.refreshPlan(); cmd != nil {
 		t.Fatalf("refreshPlan returned a command: %v", m.err)
@@ -401,7 +401,7 @@ func TestInterfaceProducesARealArchive(t *testing.T) {
 
 	msg := startBackup(archive.BackupOptions{
 		Config:      m.cfg,
-		Keyring:     m.keyring,
+		Keyring:     m.backupKey,
 		OutputPath:  m.outPath,
 		ToolVersion: "test",
 		Planned:     &m.plan.Stats,
@@ -415,7 +415,7 @@ func TestInterfaceProducesARealArchive(t *testing.T) {
 		t.Fatalf("backup failed: %v", done.err)
 	}
 
-	res, err := archive.Verify(m.outPath, m.keyring)
+	res, err := archive.Verify(m.outPath, m.backupKey)
 	if err != nil {
 		t.Fatalf("the archive the interface wrote does not verify: %v", err)
 	}
@@ -838,5 +838,93 @@ func TestReturningFromAnEditLandsOnTheReview(t *testing.T) {
 	send(m, "esc")
 	if m.state != stateMenu {
 		t.Errorf("esc from the review led to %v, want the menu", m.state)
+	}
+}
+
+// ---------- keys must not outlive the run that chose them ----------
+
+// The passphrase typed to open somebody else's archive must never become the
+// passphrase a later backup is encrypted with. Nothing on screen would say it
+// had happened, and the archive would be locked behind a secret the user never
+// chose for it.
+func TestInspectingAnArchiveDoesNotSupplyTheNextBackupsKey(t *testing.T) {
+	m, _ := reviewing(t)
+	m.cfg.Encryption.Recipients = nil // passphrase mode, so nothing else can fill in
+	m.adoptConfig(m.cfg)
+
+	// Stand where unlocking an archive leaves the model, then walk back out.
+	m.archiveKey = &codec.Keyring{Passphrase: []byte("the archive's passphrase")}
+	m.state = stateArchiveInfo
+	m.back = []state{stateMenu}
+	send(m, "esc")
+	if m.state != stateMenu {
+		t.Fatalf("state = %v, want the menu", m.state)
+	}
+
+	send(m, "enter") // back up
+	if m.state != stateReview {
+		t.Fatalf("state = %v (err %v), want review", m.state, m.err)
+	}
+	send(m, "enter") // start it
+
+	if m.backupKey != nil {
+		t.Fatalf("a backup key appeared without a screen asking: %q",
+			m.backupKey.Passphrase)
+	}
+	if m.state != stateCrypto {
+		t.Errorf("state = %v, want the encryption screen to ask", m.state)
+	}
+}
+
+// A finished run's key belongs to that run. Reusing it would encrypt a second
+// archive with a secret chosen for the first, again without asking.
+func TestAFinishedBackupDoesNotLendItsKeyToTheNext(t *testing.T) {
+	m, _ := reviewing(t)
+	m.cfg.Encryption.Recipients = nil
+	m.adoptConfig(m.cfg)
+
+	m.backupKey = &codec.Keyring{Passphrase: []byte("chosen for the first archive")}
+	m.genPass = "chosen for the first archive"
+	m.outPath = "/tmp/already-written.tar.zst.age"
+	m.result = &archive.BackupResult{Path: m.outPath}
+	m.state = stateDone
+
+	send(m, "enter") // back to the menu
+	if m.backupKey != nil {
+		t.Errorf("the key outlived its run: %q", m.backupKey.Passphrase)
+	}
+	if m.genPass != "" {
+		t.Errorf("a generated passphrase outlived the screen that showed it: %q", m.genPass)
+	}
+	// A reused output path names an archive that now exists, which the writer
+	// refuses; the next run has to generate a fresh name.
+	if m.outPath != "" {
+		t.Errorf("the output path outlived its run: %q", m.outPath)
+	}
+
+	send(m, "enter") // back up again
+	if m.state != stateReview {
+		t.Fatalf("state = %v (err %v), want review", m.state, m.err)
+	}
+	send(m, "enter")
+	if m.state != stateCrypto {
+		t.Errorf("state = %v, want the encryption screen to ask again", m.state)
+	}
+}
+
+// Recipients are the exception, and deliberately so: they are public keys the
+// configuration itself names, so there is nothing to ask about.
+func TestRecipientsInTheConfigurationStillNeedNoPrompt(t *testing.T) {
+	m, _ := reviewing(t)
+	if cmd := m.refreshPlan(); cmd != nil || m.err != nil {
+		t.Fatalf("plan failed: %v", m.err)
+	}
+
+	send(m, "enter") // start the backup straight from the review
+	if m.state == stateCrypto {
+		t.Fatal("a configuration naming recipients should not ask for a key")
+	}
+	if m.backupKey == nil || len(m.backupKey.Recipients) != 1 {
+		t.Fatalf("recipients did not become the backup key: %+v", m.backupKey)
 	}
 }

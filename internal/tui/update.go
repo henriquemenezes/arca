@@ -257,7 +257,7 @@ func (m *model) keyCrypto(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.genPass = p
-			m.keyring = &codec.Keyring{Passphrase: []byte(p)}
+			m.backupKey = &codec.Keyring{Passphrase: []byte(p)}
 			m.cfg.Encryption.Recipients = nil
 			return m, m.toOutput()
 		case 1:
@@ -297,7 +297,7 @@ func (m *model) keyPassphrase(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.genPass = ""
-		m.keyring = &codec.Keyring{Passphrase: []byte(m.passInput.Value())}
+		m.backupKey = &codec.Keyring{Passphrase: []byte(m.passInput.Value())}
 		m.cfg.Encryption.Recipients = nil
 		m.confirmPass.Blur()
 		return m, m.toOutput()
@@ -332,7 +332,7 @@ func (m *model) acceptRecipients() (tea.Model, tea.Cmd) {
 		m.notice = "Only one recipient. Add a recovery key kept offline, or losing this key loses the archive."
 	}
 	m.cfg.Encryption.Recipients = rcpts
-	m.keyring = ring
+	m.backupKey = ring
 	m.genPass = ""
 	m.rcptInput.Blur()
 	return m, m.toOutput()
@@ -422,10 +422,10 @@ func (m *model) keyReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.fail(errors.New("nothing to back up"))
 			return m, nil
 		}
-		if m.keyring == nil {
+		if m.backupKey == nil {
 			// Reached from a config on disk, so encryption has not been chosen.
 			if len(m.cfg.Encryption.Recipients) > 0 {
-				m.keyring = &codec.Keyring{Recipients: m.cfg.Encryption.Recipients}
+				m.backupKey = &codec.Keyring{Recipients: m.cfg.Encryption.Recipients}
 			} else {
 				m.push(stateCrypto)
 				return m, nil
@@ -440,7 +440,7 @@ func (m *model) keyReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			startBackup(archive.BackupOptions{
 				Config:      m.cfg,
 				ConfigTOML:  m.cfgTOML,
-				Keyring:     m.keyring,
+				Keyring:     m.backupKey,
 				OutputPath:  m.outPath,
 				ToolVersion: cli.Version,
 				Planned:     &m.plan.Stats,
@@ -566,6 +566,7 @@ func (m *model) keyFinished(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.back = nil
 		m.err = nil
 		m.notice = ""
+		m.endRun()
 		return m, nil
 	case "s":
 		if m.state == stateDone && !m.fromDisk {
@@ -648,7 +649,7 @@ func (m *model) acceptArchiveKey() (tea.Model, tea.Cmd) {
 		m.fail(err)
 		return m, nil
 	}
-	m.keyring, m.info = ring, info
+	m.archiveKey, m.info = ring, info
 	m.passInput.Blur()
 	m.push(stateArchiveInfo)
 	return m, nil
@@ -687,7 +688,7 @@ func (m *model) acceptRestoreTarget() (tea.Model, tea.Cmd) {
 	return m, tea.Batch(
 		startRestore(archive.RestoreOptions{
 			Path:    m.archivePath,
-			Keyring: m.keyring,
+			Keyring: m.archiveKey,
 			Target:  target,
 		}, m.msgs),
 		waitFor(m.msgs),
