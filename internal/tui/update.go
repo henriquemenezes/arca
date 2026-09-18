@@ -36,7 +36,7 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case stateRecipients:
 		return m.keyText(msg, &m.rcptInput, m.acceptRecipients)
 	case stateOutput:
-		return m.keyText(msg, &m.outInput, m.acceptOutput)
+		return m.keyPath(msg, &m.outInput, m.acceptOutput)
 	case stateReview:
 		return m.keyReview(msg)
 	case stateDone, stateRestoreDone, stateGenerated:
@@ -48,7 +48,7 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case stateArchiveInfo:
 		return m.keyArchiveInfo(msg)
 	case stateRestoreTarget:
-		return m.keyText(msg, &m.targetInput, m.acceptRestoreTarget)
+		return m.keyPath(msg, &m.targetInput, m.acceptRestoreTarget)
 	}
 	return m, nil
 }
@@ -302,7 +302,7 @@ func (m *model) toOutput() tea.Cmd {
 }
 
 func (m *model) acceptOutput() (tea.Model, tea.Cmd) {
-	dir := strings.TrimSpace(m.outInput.Value())
+	dir := expandHome(strings.TrimSpace(m.outInput.Value()))
 	if dir == "" {
 		dir = defaultOutputDir()
 	}
@@ -509,7 +509,7 @@ func (m *model) keyArchiveInfo(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) acceptRestoreTarget() (tea.Model, tea.Cmd) {
-	target := strings.TrimSpace(m.targetInput.Value())
+	target := expandHome(strings.TrimSpace(m.targetInput.Value()))
 	if target == "" {
 		m.fail(errors.New("a target directory is required"))
 		return m, nil
@@ -579,4 +579,20 @@ func (m *model) keyText(msg tea.KeyMsg, ti *textinput.Model, accept func() (tea.
 	var cmd tea.Cmd
 	*ti, cmd = ti.Update(msg)
 	return m, cmd
+}
+
+// keyPath is keyText's sibling for the two screens that take a filesystem
+// path. Accepting and going back work the same; what differs is everything in
+// between, because a pathInput claims tab and the arrows for completion before
+// the text field sees them.
+func (m *model) keyPath(msg tea.KeyMsg, pi *pathInput, accept func() (tea.Model, tea.Cmd)) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		pi.Blur()
+		m.pop()
+		return m, nil
+	case "enter":
+		return accept()
+	}
+	return m, pi.Update(msg)
 }

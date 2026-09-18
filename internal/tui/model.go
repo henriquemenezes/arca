@@ -81,8 +81,8 @@ type model struct {
 	passInput   textinput.Model
 	confirmPass textinput.Model
 	rcptInput   textinput.Model
-	outInput    textinput.Model
-	targetInput textinput.Model
+	outInput    pathInput
+	targetInput pathInput
 	passStage   int
 
 	plan     *archive.PlanResult
@@ -158,8 +158,8 @@ func newModel() *model {
 		msgs:        make(chan tea.Msg, 64),
 		destInput:   mk("dotfiles  (empty = archive root)", 40),
 		rcptInput:   mk("age1…  (comma or space separated)", 60),
-		outInput:    mk(".", 60),
-		targetInput: mk("./restored", 60),
+		outInput:    newPathInput(".", 60),
+		targetInput: newPathInput("./restored", 60),
 	}
 	m.passInput = mk("passphrase", 48)
 	m.passInput.EchoMode = textinput.EchoPassword

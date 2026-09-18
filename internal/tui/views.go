@@ -166,10 +166,13 @@ func (m *model) viewOutput() string {
 	b.WriteString(header("Where should the archive be written?", "backup › destination"))
 	b.WriteString(stMuted.Render("A directory gets a generated name; a file path is used as given.") + "\n\n")
 	b.WriteString("  " + m.outInput.View() + "\n\n")
+	if list := m.outInput.ViewList(m.width, m.pathListRows()); list != "" {
+		b.WriteString(list + "\n")
+	}
 	if m.cfg != nil {
 		b.WriteString(stMuted.Render("  Name: "+m.archiveName()) + "\n")
 	}
-	return b.String() + help("enter continue", "esc back")
+	return b.String() + help("tab complete", "↑↓ pick", "enter continue", "esc back")
 }
 
 func (m *model) viewReview() string {
@@ -361,8 +364,9 @@ func (m *model) viewRestoreTarget() string {
 	b.WriteString(header("Where should it be restored?", "restore › target"))
 	b.WriteString(stMuted.Render("The archive already holds the mapped layout, so it is recreated under this directory.") + "\n")
 	b.WriteString(stMuted.Render("Nothing outside it is ever written, and existing files are never replaced.") + "\n\n")
-	b.WriteString("  " + m.targetInput.View() + "\n")
-	return b.String() + help("enter restore", "esc back")
+	b.WriteString("  " + m.targetInput.View() + "\n\n")
+	b.WriteString(m.targetInput.ViewList(m.width, m.pathListRows()))
+	return b.String() + help("tab complete", "↑↓ pick", "enter restore", "esc back")
 }
 
 func (m *model) viewRestoring() string {

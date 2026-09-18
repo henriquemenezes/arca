@@ -52,6 +52,15 @@ func TestRenderPreview(t *testing.T) {
 			}
 		})},
 		{"encryption", mk(stateCrypto, nil)},
+		{"destination (typed prefix)", mk(stateOutput, func(m *model) {
+			m.outInput.SetValue(filepath.Join(home, "D"))
+		})},
+		{"destination (field cleared)", mk(stateOutput, func(m *model) {
+			m.outInput.SetValue("")
+		})},
+		{"restore target", mk(stateRestoreTarget, func(m *model) {
+			m.targetInput.SetValue(home + string(filepath.Separator))
+		})},
 		{"passphrase", mk(statePassphrase, func(m *model) { m.passInput.SetValue("senha123") })},
 		{"review", mk(stateReview, func(m *model) {
 			m.mapping = []mapEntry{

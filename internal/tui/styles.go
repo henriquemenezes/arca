@@ -100,6 +100,13 @@ const (
 	minHeightForArk  = 25
 )
 
+// pathListRows is how many completion candidates a path screen may draw: the
+// widget's own cap, unless the terminal is short enough to have the last word.
+// Three is the floor — below that the list stops being a list.
+func (m *model) pathListRows() int {
+	return maxInt(3, minInt(pathListRows, m.height-16))
+}
+
 func help(keys ...string) string {
 	out := ""
 	for i, k := range keys {
