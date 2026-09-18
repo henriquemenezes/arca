@@ -11,6 +11,31 @@ import (
 	"github.com/hamsa/arca/internal/codec"
 )
 
+// TestMain fences the whole package away from the real home directory.
+//
+// The config search ends at ~/.arca, and the identity lives there too, so a
+// test that calls FindConfig or ResolveConfigPath without saying otherwise
+// reaches into the home of whoever runs the suite: it finds their arca.toml and
+// fails, or worse, writes over it. The e2e tests already fence themselves this
+// way in newHarness; this does the same for every other test in the package,
+// and an individual test is still free to point the variables somewhere else.
+func TestMain(m *testing.M) {
+	sandbox, err := os.MkdirTemp("", "arca-cli-test")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.MkdirAll(filepath.Join(sandbox, "home"), 0o755); err != nil {
+		panic(err)
+	}
+	os.Setenv(cli.HomeEnv, filepath.Join(sandbox, "arca"))
+	os.Setenv("XDG_CONFIG_HOME", filepath.Join(sandbox, "config"))
+	os.Setenv("HOME", filepath.Join(sandbox, "home"))
+
+	code := m.Run()
+	os.RemoveAll(sandbox)
+	os.Exit(code)
+}
+
 func codecs(t *testing.T) (codec.Compressor, codec.Cipher) {
 	t.Helper()
 	c, err := codec.GetCompressor("zstd")
@@ -124,8 +149,13 @@ func TestFindConfig(t *testing.T) {
 	})
 
 	t.Run("no config at all is not an error", func(t *testing.T) {
+		// Every place the search looks has to be empty, or this asserts
+		// something other than what it says. ~/.arca is the one easily
+		// forgotten, and the one that reaches a real home.
 		empty := t.TempDir()
 		t.Chdir(empty)
+		t.Setenv(cli.HomeEnv, "")
+		t.Setenv("HOME", empty)
 		t.Setenv("XDG_CONFIG_HOME", empty)
 		got, err := cli.FindConfig("")
 		if err != nil {
