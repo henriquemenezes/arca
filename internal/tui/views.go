@@ -38,7 +38,7 @@ func (m *model) viewMenu() string {
 	if m.notice != "" {
 		foot.WriteString(stOK.Render("✓ "+m.notice) + "\n")
 	}
-	foot.WriteString(help("↑↓ move", "enter choose", "q quit"))
+	foot.WriteString(m.help("↑↓ move", "enter choose", "q quit"))
 
 	m.fitMenu(head.String(), foot.String())
 	return head.String() + m.menu.View() + foot.String()
@@ -70,7 +70,7 @@ func (m *model) viewSources() string {
 	b.WriteString(m.browser.View(m.width - 6))
 	b.WriteString("\n" + stMuted.Render(fmt.Sprintf("%s selected",
 		cli.Count(len(m.browser.selected), "item", "items"))) + "\n")
-	return b.String() + help("↑↓ move", "enter open", "← up", "space select", ". hidden", "~ home", "tab continue", "esc back")
+	return b.String() + m.help("↑↓ move", "enter open", "← up", "space select", ". hidden", "~ home", "tab continue", "esc back")
 }
 
 func (m *model) viewMapping() string {
@@ -94,9 +94,9 @@ func (m *model) viewMapping() string {
 
 	if m.editing {
 		b.WriteString("\n" + stMuted.Render("Destination directory:") + "\n  " + m.destInput.View() + "\n")
-		return b.String() + help("enter accept", "esc cancel")
+		return b.String() + m.help("enter accept", "esc cancel")
 	}
-	return b.String() + help("↑↓ move", "e edit destination", "d remove", "tab continue", "esc back")
+	return b.String() + m.help("↑↓ move", "e edit destination", "d remove", "tab continue", "esc back")
 }
 
 func (m *model) viewCrypto() string {
@@ -115,7 +115,7 @@ func (m *model) viewCrypto() string {
 			b.WriteString("    " + stMuted.Render(item.blurb) + "\n")
 		}
 	}
-	return b.String() + help("↑↓ move", "enter choose", "esc back")
+	return b.String() + m.help("↑↓ move", "enter choose", "esc back")
 }
 
 func (m *model) viewPassphrase() string {
@@ -130,7 +130,7 @@ func (m *model) viewPassphrase() string {
 		b.WriteString("  " + m.confirmPass.View() + "\n")
 		b.WriteString("\n" + stMuted.Render("Type it once more. A typo here is unrecoverable.") + "\n")
 	}
-	return b.String() + help("enter continue", "esc back")
+	return b.String() + m.help("enter continue", "esc back")
 }
 
 // strengthMeter gives immediate feedback, because a strength check that only
@@ -162,7 +162,7 @@ func (m *model) viewRecipients() string {
 	b.WriteString(stMuted.Render("Any one of these keys can open the archive.") + "\n")
 	b.WriteString(stMuted.Render("List two: the key you use day to day, and a recovery key kept offline.") + "\n\n")
 	b.WriteString("  " + m.rcptInput.View() + "\n")
-	return b.String() + help("enter continue", "esc back")
+	return b.String() + m.help("enter continue", "esc back")
 }
 
 func (m *model) viewOutput() string {
@@ -176,7 +176,7 @@ func (m *model) viewOutput() string {
 	if m.cfg != nil {
 		b.WriteString(stMuted.Render("  Name: "+m.archiveName()) + "\n")
 	}
-	return b.String() + help("tab complete", "↑↓ pick", "enter continue", "esc back")
+	return b.String() + m.help("tab complete", "↑↓ pick", "enter continue", "esc back")
 }
 
 func (m *model) viewReview() string {
@@ -189,7 +189,7 @@ func (m *model) viewReview() string {
 	if m.plan == nil {
 		b.WriteString(m.viewConfigSummary())
 		b.WriteString(stMuted.Render("  Nothing planned yet.") + "\n")
-		return b.String() + help("e edit this configuration", "n new configuration",
+		return b.String() + m.help("e edit this configuration", "n new configuration",
 			"esc back", "q quit")
 	}
 
@@ -233,7 +233,7 @@ func (m *model) viewReview() string {
 	if m.notice != "" {
 		b.WriteString("\n" + stWarn.Render("! "+m.notice) + "\n")
 	}
-	return b.String() + help("enter start the backup", "e edit this configuration",
+	return b.String() + m.help("enter start the backup", "e edit this configuration",
 		"n new configuration", "esc back", "q quit")
 }
 
@@ -296,7 +296,7 @@ func (m *model) viewSaveConfig() string {
 
 	b.WriteString("\n" + stTitle.Render("What would be written") + "\n")
 	b.WriteString(m.previewTOML())
-	return b.String() + help("tab complete", "↑↓ pick", "enter save",
+	return b.String() + m.help("tab complete", "↑↓ pick", "enter save",
 		"ctrl+d continue without saving", "esc back")
 }
 
@@ -336,7 +336,7 @@ func (m *model) viewRunning() string {
 		cli.Count(m.lastProg.Files, "file", "files")))
 	b.WriteString("  " + stMuted.Render(shorten(m.lastProg.Member, m.width-6)) + "\n")
 	b.WriteString("\n  " + stMuted.Render("Encrypted on the way out; nothing is written in the clear.") + "\n")
-	return b.String() + help("ctrl+c abort")
+	return b.String() + m.help("ctrl+c abort")
 }
 
 func planBytes(m *model) int64 {
@@ -357,7 +357,7 @@ func (m *model) viewDone() string {
 	var b strings.Builder
 	b.WriteString(header("Backup complete", "backup › done"))
 	if m.result == nil {
-		return b.String() + help("enter menu")
+		return b.String() + m.help("enter menu")
 	}
 
 	b.WriteString("  " + stOK.Render(shorten(m.result.Path, m.width-6)) + "\n\n")
@@ -383,9 +383,9 @@ func (m *model) viewDone() string {
 		b.WriteString(stOK.Render("✓ "+m.notice) + "\n")
 	}
 	if !m.fromDisk {
-		return b.String() + help("s save this selection to ~/.arca/arca.toml", "enter menu", "q quit")
+		return b.String() + m.help("s save this selection to ~/.arca/arca.toml", "enter menu", "q quit")
 	}
-	return b.String() + help("enter menu", "q quit")
+	return b.String() + m.help("enter menu", "q quit")
 }
 
 // ---------- reading an archive ----------
@@ -398,7 +398,7 @@ func (m *model) viewPickArchive() string {
 	var b strings.Builder
 	b.WriteString(header(title, "archive › open"))
 	b.WriteString(m.browser.View(m.width - 6))
-	return b.String() + help("↑↓ move", "enter open / choose", "← up", ". hidden", "~ home", "esc back")
+	return b.String() + m.help("↑↓ move", "enter open / choose", "← up", ". hidden", "~ home", "esc back")
 }
 
 func (m *model) viewArchiveKey() string {
@@ -407,14 +407,14 @@ func (m *model) viewArchiveKey() string {
 	b.WriteString("  " + stMuted.Render(shorten(m.archivePath, m.width-6)) + "\n\n")
 	b.WriteString("  " + m.passInput.View() + "\n\n")
 	b.WriteString(stMuted.Render("  A passphrase, or the path to an age identity file.") + "\n")
-	return b.String() + help("enter unlock", "esc back")
+	return b.String() + m.help("enter unlock", "esc back")
 }
 
 func (m *model) viewArchiveInfo() string {
 	var b strings.Builder
 	b.WriteString(header("Archive contents", "archive › details"))
 	if m.info == nil {
-		return b.String() + help("esc back")
+		return b.String() + m.help("esc back")
 	}
 	mf := m.info.Manifest
 
@@ -443,9 +443,9 @@ func (m *model) viewArchiveInfo() string {
 	}
 
 	if m.intent == intentRestore {
-		return b.String() + help("enter choose a target and restore", "esc back", "q quit")
+		return b.String() + m.help("enter choose a target and restore", "esc back", "q quit")
 	}
-	return b.String() + help("esc back", "q quit")
+	return b.String() + m.help("esc back", "q quit")
 }
 
 func padRight(s string, n int) string {
@@ -462,7 +462,7 @@ func (m *model) viewRestoreTarget() string {
 	b.WriteString(stMuted.Render("Nothing outside it is ever written, and existing files are never replaced.") + "\n\n")
 	b.WriteString("  " + m.targetInput.View() + "\n\n")
 	b.WriteString(m.targetInput.ViewList(m.width, m.pathListRows()))
-	return b.String() + help("tab complete", "↑↓ pick", "enter restore", "esc back")
+	return b.String() + m.help("tab complete", "↑↓ pick", "enter restore", "esc back")
 }
 
 func (m *model) viewRestoring() string {
@@ -471,14 +471,14 @@ func (m *model) viewRestoring() string {
 	b.WriteString(fmt.Sprintf("  %s · %s\n",
 		cli.Count(m.lastProg.Files, "file", "files"), humanBytes(m.lastProg.Bytes)))
 	b.WriteString("  " + stMuted.Render(shorten(m.lastProg.Member, m.width-6)) + "\n")
-	return b.String() + help("ctrl+c abort")
+	return b.String() + m.help("ctrl+c abort")
 }
 
 func (m *model) viewRestoreDone() string {
 	var b strings.Builder
 	b.WriteString(header("Restore complete", "restore › done"))
 	if m.restored == nil {
-		return b.String() + help("enter menu")
+		return b.String() + m.help("enter menu")
 	}
 	b.WriteString("  " + stOK.Render(m.restored.Target) + "\n\n")
 	b.WriteString(fmt.Sprintf("  %s · %s · %s\n",
@@ -491,7 +491,7 @@ func (m *model) viewRestoreDone() string {
 			b.WriteString("  " + stWarn.Render("!") + " " + shorten(w, m.width-6) + "\n")
 		}
 	}
-	return b.String() + help("enter menu", "q quit")
+	return b.String() + m.help("enter menu", "q quit")
 }
 
 func (m *model) viewGenerated() string {
@@ -502,5 +502,5 @@ func (m *model) viewGenerated() string {
 		b.WriteString("  " + stMuted.Render(m.notice) + "\n\n")
 	}
 	b.WriteString(stNotice.Width(minInt(m.width-8, 84)).Render(cli.SecretNotice) + "\n")
-	return b.String() + help("enter menu", "q quit")
+	return b.String() + m.help("enter menu", "q quit")
 }

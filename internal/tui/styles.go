@@ -6,6 +6,8 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -107,13 +109,30 @@ func (m *model) pathListRows() int {
 	return maxInt(3, minInt(pathListRows, m.height-16))
 }
 
-func help(keys ...string) string {
-	out := ""
-	for i, k := range keys {
-		if i > 0 {
-			out += stCrumb.Render("  ·  ")
-		}
-		out += stHelp.Render(k)
+// help renders the key legend, wrapping onto further lines rather than running
+// off the side of the terminal. The source screen is what forces this: eight
+// keys is already more than 80 columns hold.
+func (m *model) help(keys ...string) string {
+	const sep = "  ·  "
+	width := m.width - 4 // the padding View puts around every screen
+	if width < 20 {
+		width = 20
 	}
-	return "\n" + out
+
+	var out strings.Builder
+	col := 0
+	for i, k := range keys {
+		switch {
+		case i == 0:
+		case col+len(sep)+lipgloss.Width(k) > width:
+			out.WriteString("\n")
+			col = 0
+		default:
+			out.WriteString(stCrumb.Render(sep))
+			col += len(sep)
+		}
+		out.WriteString(stHelp.Render(k))
+		col += lipgloss.Width(k)
+	}
+	return "\n" + out.String()
 }
