@@ -81,6 +81,7 @@ func (m *model) chooseMenu() (tea.Model, tea.Cmd) {
 		}
 		m.intentCfg = cfgFresh
 		m.push(stateSources)
+		return m, m.openSources()
 	case 1: // restore
 		m.intent = intentRestore
 		m.resetBrowser(defaultOutputDir())
@@ -101,13 +102,15 @@ func (m *model) chooseMenu() (tea.Model, tea.Cmd) {
 
 // ---------- backup: source selection ----------
 
-// keySources hands the keyboard to whichever of the screen's three jobs has it.
+// keySources hands the keyboard to whichever of the screen's jobs has it.
 //
 // The dispatch has to come first. The browser answers to bare letters — k, j,
-// g, G, h, l, ~, . — and this screen answers to q, so while a field is open
-// every one of those is a character being typed and not a command.
+// g, G, ~, . — and this screen answers to q, so while a field is open every one
+// of those is a character being typed and not a command.
 func (m *model) keySources(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
+	case srcPath:
+		return m.keyPathBar(msg)
 	case srcFilter:
 		return m.keyFilter(msg)
 	case srcExcludes:
@@ -126,7 +129,9 @@ func (m *model) keyBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "q":
 		return m, tea.Quit
-	case "tab", "ctrl+d":
+	case "d":
+		return m, m.focusPath()
+	case "ctrl+d":
 		return m.acceptSources()
 	case "/":
 		return m, m.openSearch()
@@ -142,6 +147,102 @@ func (m *model) keyBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Whatever the key did, it may have marked something new; the preview is
 	// what turns that into a count.
 	return m, m.measureSelection()
+}
+
+// keyPathBar drives the directory line, which is where this screen opens.
+//
+// The field is a detour, not the screen: d opens it, and it hands the keyboard
+// back as soon as it has done its one job. That is why enter returns to the
+// list — arriving somewhere is the whole reason the path was typed — and why
+// esc does too, once there is no half-typed path left to take back first.
+//
+// Tab completes here, as it does in every other field in the interface.
+func (m *model) keyPathBar(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.browser.path == nil {
+		// No field on this browser; the list is the whole screen.
+		m.mode = srcBrowse
+		return m.keyBrowse(msg)
+	}
+	p := m.browser.path
+
+	switch msg.String() {
+	case "esc":
+		// Esc undoes the smallest thing it can: a path typed goes back
+		// before the focus does.
+		if m.browser.pathEdited() {
+			m.browser.revertPath()
+			m.err = nil
+			return m, nil
+		}
+		m.focusList()
+		return m, nil
+
+	case "tab":
+		before := p.Value()
+		p.complete()
+		m.browser.followPath(p.Value() != before)
+		m.err = nil
+		return m, nil
+
+	case "ctrl+d":
+		return m.acceptSources()
+
+	case "enter":
+		// Nothing typed: the field has nothing to go to, and the list is
+		// where the screen lives.
+		if !m.browser.pathEdited() {
+			m.focusList()
+			return m, nil
+		}
+		if _, err := m.browser.openPath(); err != nil {
+			m.fail(err)
+			return m, nil
+		}
+		// Arrived. Whether the path named a directory to look through or
+		// a file now under the cursor, what happens next — space, the
+		// arrows, enter — happens in the list.
+		m.focusList()
+		return m, nil
+	}
+
+	// Everything else is the field's: the arrows through the candidates, and
+	// the characters of the path itself.
+	before := p.Value()
+	cmd := p.Update(msg)
+	m.browser.followPath(p.Value() != before)
+	return m, cmd
+}
+
+// focusList hands the keyboard to the file list.
+func (m *model) focusList() {
+	if m.browser.path != nil {
+		m.browser.path.Blur()
+	}
+	m.mode = srcBrowse
+	m.err = nil
+}
+
+// focusPath hands it back to the directory line, which first goes back to
+// saying where the browser actually is: the arrows have very likely moved it
+// since, and a field that opens on a stale path is a field that lies.
+func (m *model) focusPath() tea.Cmd {
+	if m.browser.path == nil {
+		return nil
+	}
+	m.browser.syncPath()
+	m.mode = srcPath
+	m.err = nil
+	return m.browser.path.Focus()
+}
+
+// openSources readies the screen. The file list keeps the keyboard: choosing
+// what to back up is what the screen is for, and the directory field is the
+// detour d opens for the times the answer is quicker to type than to walk to.
+func (m *model) openSources() tea.Cmd {
+	m.browser.attachPath()
+	m.fitSourceFields()
+	m.mode = srcBrowse
+	return nil
 }
 
 // keyFilter drives the search. Every printable key belongs to the query, so the
@@ -209,7 +310,7 @@ func (m *model) keyExcludes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "q":
 		return m, tea.Quit
-	case "tab", "ctrl+d":
+	case "ctrl+d":
 		return m.acceptSources()
 	case "up", "k":
 		m.excIndex = maxInt(0, cursor-1)
@@ -279,7 +380,7 @@ func (m *model) openSearch() tea.Cmd {
 	f, cmd := openFilter(m.filterGen, m.browser.cwd)
 	m.browser.filter = f
 	m.browser.cursor, m.browser.offset = 0, 0
-	m.fitSearchField()
+	m.fitSourceFields()
 	m.mode = srcFilter
 	m.err = nil
 	return tea.Batch(cmd, m.browser.refilter())
@@ -323,19 +424,23 @@ func (m *model) completeSearch() tea.Cmd {
 	return m.browser.refilter()
 }
 
-// fitSearchField holds the query field to the column the file list occupies.
+// fitSourceFields holds the screen's two fields to the column the file list
+// occupies.
 //
 // A typed-out path is longer than anything in the list beside it, and a field
 // left to its own width would widen that whole block and shove the preview
 // panel off the screen. The width has to be set here rather than while drawing:
 // textinput works out which part of a long value is visible when it handles a
 // key, so a width applied at render time is one keystroke late.
-func (m *model) fitSearchField() {
-	if m.browser.filter == nil {
-		return
-	}
+func (m *model) fitSourceFields() {
 	browserWidth, _ := m.sourcesLayout()
-	m.browser.filter.input.Width = maxInt(8, browserWidth-2-len(searchPrompt))
+	if m.browser.filter != nil {
+		m.browser.filter.input.Width = maxInt(8, browserWidth-2-len(searchPrompt))
+	}
+	if m.browser.path != nil {
+		// The prompt textinput draws before the value is two columns wide.
+		m.browser.path.input.Width = maxInt(8, browserWidth-4)
+	}
 }
 
 // excludeUnderCursor is the x key, and works the same on a row the search found
@@ -373,6 +478,9 @@ func (m *model) leaveSources() {
 	m.browser.filter.close()
 	m.browser.filter = nil
 	m.excInput.Blur()
+	if m.browser.path != nil {
+		m.browser.path.Blur()
+	}
 	m.mode = srcBrowse
 }
 
@@ -746,7 +854,7 @@ func (m *model) editConfig() tea.Cmd {
 		m.browser.selected[abs] = true
 	}
 	m.push(stateSources)
-	return m.measureSelection()
+	return tea.Batch(m.openSources(), m.measureSelection())
 }
 
 // newConfig starts over: nothing selected, nothing inherited, and the built-in
@@ -760,7 +868,7 @@ func (m *model) newConfig() tea.Cmd {
 	home, _ := os.UserHomeDir()
 	m.resetBrowser(home)
 	m.push(stateSources)
-	return nil
+	return m.openSources()
 }
 
 // ---------- backup: saving the configuration ----------

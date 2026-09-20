@@ -166,7 +166,7 @@ func TestAPatternTypedIntoThePanelReachesTheConfiguration(t *testing.T) {
 	send(m, "a")                // open the field
 	typed(m, "*.iso")           //
 	send(m, "enter")            //
-	send(m, "tab")              // on to the mapping screen
+	send(m, "ctrl+d")           // on to the mapping screen
 	m.mapping[0].dest = "Work"  //
 	cfg, err := m.buildConfig() //
 	if err != nil {
@@ -189,7 +189,7 @@ func TestRemovingAPatternRemovesItFromTheConfiguration(t *testing.T) {
 	if got := m.srcExclude[source]; len(got) != 0 {
 		t.Fatalf("patterns are %v, want none left", got)
 	}
-	send(m, "tab")
+	send(m, "ctrl+d")
 	cfg, err := m.buildConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -267,8 +267,8 @@ func TestGroupExcludesSurviveAnEditWithSeveralSources(t *testing.T) {
 	m.cfg = before
 	m.state = stateReview
 	m.editConfig()
-	send(m, "tab") // sources → mapping
-	send(m, "tab") // mapping → build
+	send(m, "ctrl+d") // sources → mapping
+	send(m, "tab")    // mapping → build
 
 	after, err := m.buildConfig()
 	if err != nil {
@@ -304,10 +304,15 @@ func TestTheSourceScreenFitsEveryModeAndWidth(t *testing.T) {
 	root, source := excludeTree(t)
 
 	for _, width := range []int{60, 80, 100} {
-		for _, mode := range []sourcesMode{srcBrowse, srcExcludes, srcExcludeInput} {
+		for _, mode := range []sourcesMode{srcBrowse, srcPath, srcExcludes, srcExcludeInput} {
 			m := sourcesModel(t, root, width, 30)
 			m.browser.selected[source] = true
 			m.mode = mode
+			if mode == srcPath {
+				// The field is only drawn as a field while it holds the
+				// keyboard, which is the state whose width is at stake.
+				m.focusPath()
+			}
 
 			for _, line := range strings.Split(m.View(), "\n") {
 				if w := lipgloss.Width(line); w > width {
@@ -327,7 +332,7 @@ func TestAnExcludedPathNeverReachesTheArchive(t *testing.T) {
 
 	m := chosen(t, source, "node_modules")
 	send(m, "x") // leave node_modules out
-	send(m, "tab")
+	send(m, "ctrl+d")
 	send(m, "tab") // through the mapping screen, building the configuration
 
 	m.outPath = filepath.Join(out, "from-tui.tar.zst.age")

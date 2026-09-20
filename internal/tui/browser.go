@@ -26,6 +26,14 @@ type browser struct {
 	hidden   bool
 	err      error
 
+	// path is the editable form of the line naming cwd, and is nil on the
+	// screens that do not offer one. pathTyped says it is holding something
+	// typed and not yet gone to, and pathFrom is the directory it was opened
+	// on, which is where esc puts the list back. See pathbar.go.
+	path      *pathInput
+	pathTyped bool
+	pathFrom  string
+
 	// filter is the fuzzy search over everything below cwd, and is nil unless
 	// the search is open. While it is set the rows come from it instead of from
 	// the directory listing; everything else — the cursor, the selection, the
@@ -201,7 +209,7 @@ func (b *browser) clampOffset() {
 // focus puts the cursor on a known child, so stepping out of a directory lands
 // where the user came from.
 func (b *browser) focus(path string) {
-	for i, e := range b.entries {
+	for i, e := range b.list() {
 		if e.path == path {
 			b.cursor = i
 			b.clampOffset()
@@ -256,6 +264,11 @@ func (b *browser) View(width int, excluded func(string) bool) string {
 		// the useful end of a long path visible, not what guarantees the width.
 		sb.WriteString(lipgloss.NewStyle().MaxWidth(width).Render(b.filter.input.View()) + "\n")
 		sb.WriteString(stCrumb.Render(clip(b.filter.status(width-2), width-2)) + "\n")
+	} else if b.path != nil && b.path.input.Focused() {
+		// The directory line is a field only while it has the keys. Blurred it
+		// is what it always was: a label saying where the list came from.
+		sb.WriteString(lipgloss.NewStyle().MaxWidth(width).Render(b.path.View()) + "\n")
+		sb.WriteString(stCrumb.Render(clip(b.pathStatus(width-2), width-2)) + "\n")
 	} else {
 		sb.WriteString(stMuted.Render(shorten(b.cwd, width-2)) + "\n\n")
 	}

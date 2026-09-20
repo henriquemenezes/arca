@@ -145,6 +145,9 @@ func (m *model) selectionLine() string {
 // do nothing.
 func (m *model) sourcesHelp() string {
 	switch m.mode {
+	case srcPath:
+		return m.help("type a directory", "tab complete", "↑↓ candidates", "enter go",
+			"esc file list")
 	case srcFilter:
 		// What to type is on the line above, in the field itself, so the help
 		// is only keys here.
@@ -155,8 +158,9 @@ func (m *model) sourcesHelp() string {
 	case srcExcludeInput:
 		return m.help("enter add", "esc cancel")
 	}
-	return m.help("↑↓ move", "→ open", "← up", "space select", "x exclude",
-		"X excludes", "/ find", ". hidden", "h home", "tab continue", "esc back")
+	return m.help("↑↓ move", "→ open", "← up", "space select", "d directory",
+		"h home", "x exclude", "X excludes", "/ find", ". hidden", "ctrl+d continue",
+		"esc back")
 }
 
 func (m *model) viewMapping() string {
@@ -182,7 +186,8 @@ func (m *model) viewMapping() string {
 		b.WriteString("\n" + stMuted.Render("Destination directory:") + "\n  " + m.destInput.View() + "\n")
 		return b.String() + m.help("enter accept", "esc cancel")
 	}
-	return b.String() + m.help("↑↓ move", "e edit destination", "d remove", "tab continue", "esc back")
+	return b.String() + m.help("↑↓ move", "e edit destination", "d remove",
+		"tab continue", "esc back")
 }
 
 func (m *model) viewCrypto() string {

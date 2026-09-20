@@ -58,6 +58,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyBackspace}
 	case "ctrl+d":
 		return tea.KeyMsg{Type: tea.KeyCtrlD}
+	case "ctrl+u":
+		return tea.KeyMsg{Type: tea.KeyCtrlU}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
@@ -464,12 +466,12 @@ func TestSourceSelectionFlowsIntoMapping(t *testing.T) {
 	m.browser = newBrowser(root)
 
 	// Continuing with nothing chosen must say so rather than move on quietly.
-	send(m, "tab")
+	send(m, "ctrl+d")
 	if m.state != stateSources || m.err == nil {
 		t.Fatalf("empty selection was accepted: state=%v err=%v", m.state, m.err)
 	}
 
-	send(m, " ", "tab")
+	send(m, " ", "ctrl+d")
 	if m.state != stateMapping {
 		t.Fatalf("state = %v, want mapping", m.state)
 	}
@@ -736,9 +738,9 @@ func TestEditingKeepsWhatTheMappingScreenNeverAsks(t *testing.T) {
 	m, _ := reviewing(t)
 	before := m.cfg
 
-	send(m, "e")   // review  → sources, already marked
-	send(m, "tab") // sources → mapping, destinations inherited
-	send(m, "tab") // mapping → save screen
+	send(m, "e")      // review  → sources, already marked
+	send(m, "ctrl+d") // sources → mapping, destinations inherited
+	send(m, "tab")    // mapping → save screen
 	if m.state != stateSaveConfig {
 		t.Fatalf("state = %v (err %v), want the save screen", m.state, m.err)
 	}
@@ -791,7 +793,7 @@ func TestSourceReselectionKeepsChosenDestinations(t *testing.T) {
 	m.state = stateSources
 	m.browser = newBrowser(root)
 
-	send(m, " ", "tab")
+	send(m, " ", "ctrl+d")
 	if m.state != stateMapping {
 		t.Fatalf("state = %v, want mapping", m.state)
 	}
@@ -803,8 +805,8 @@ func TestSourceReselectionKeepsChosenDestinations(t *testing.T) {
 		t.Fatalf("dest = %q, want media", m.mapping[0].dest)
 	}
 
-	send(m, "esc") // back to the browser
-	send(m, "tab") // and forward again
+	send(m, "esc")    // back to the browser
+	send(m, "ctrl+d") // and forward again
 	if m.state != stateMapping {
 		t.Fatalf("state = %v, want mapping", m.state)
 	}
@@ -947,7 +949,7 @@ func TestSkippingTheSaveLeavesTheDiskAlone(t *testing.T) {
 
 	// Drive the real route in, so the state the save screen inherits is the
 	// state an edit actually leaves behind.
-	send(m, "e", "tab", "tab")
+	send(m, "e", "ctrl+d", "tab")
 	if m.state != stateSaveConfig {
 		t.Fatalf("state = %v (err %v), want the save screen", m.state, m.err)
 	}
@@ -974,7 +976,7 @@ func TestSkippingTheSaveLeavesTheDiskAlone(t *testing.T) {
 func TestReturningFromAnEditLandsOnTheReview(t *testing.T) {
 	m, _ := reviewing(t)
 
-	send(m, "e", "tab", "tab", "ctrl+d")
+	send(m, "e", "ctrl+d", "tab", "ctrl+d")
 	if m.state != stateReview {
 		t.Fatalf("state = %v, want review", m.state)
 	}

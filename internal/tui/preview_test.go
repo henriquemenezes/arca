@@ -38,12 +38,15 @@ func run(m *model, cmd tea.Cmd) {
 	}
 }
 
+// sourcesModel puts the model on the source screen, where it opens: the file
+// list with the keyboard.
 func sourcesModel(t *testing.T, root string, width, height int) *model {
 	t.Helper()
 	m := newModel()
 	m.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	m.state = stateSources
 	m.browser = newBrowser(root)
+	m.openSources()
 	return m
 }
 

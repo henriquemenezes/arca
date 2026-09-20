@@ -49,33 +49,42 @@ func TestRenderPreview(t *testing.T) {
 		{"menu", mk(stateMenu, nil)},
 		{"sources", mk(stateSources, func(m *model) {
 			m.browser = newBrowser(home)
+			m.openSources()
 			m.browser.selected[filepath.Join(home, ".ssh")] = true
 			m.browser.selected[filepath.Join(home, "Downloads")] = true
 			run(m, m.measureSelection())
 		})},
-		{"sources (nothing chosen)", mk(stateSources, func(m *model) {
+		{"sources (typing a directory, after d)", mk(stateSources, func(m *model) {
 			m.browser = newBrowser(home)
+			m.openSources()
+			m.focusPath()
+			m.browser.path.SetValue(filepath.Join(home, "W"))
+			m.browser.path.CursorEnd()
 		})},
 		{"sources (too narrow for the preview)", mk(stateSources, func(m *model) {
 			m.Update(tea.WindowSizeMsg{Width: 64, Height: 24})
 			m.browser = newBrowser(home)
+			m.openSources()
 			m.browser.selected[filepath.Join(home, ".ssh")] = true
 			run(m, m.measureSelection())
 		})},
 		{"sources (searching for a name)", mk(stateSources, func(m *model) {
 			m.browser = newBrowser(home)
+			m.openSources()
 			m.browser.selected[filepath.Join(home, ".ssh")] = true
 			search(t, m, "nvim")
 			run(m, m.measureSelection())
 		})},
 		{"sources (typing a path)", mk(stateSources, func(m *model) {
 			m.browser = newBrowser(home)
+			m.openSources()
 			m.browser.selected[filepath.Join(home, ".ssh")] = true
 			search(t, m, filepath.Join(home, "Work")+string(filepath.Separator))
 			run(m, m.measureSelection())
 		})},
 		{"sources (excludes)", mk(stateSources, func(m *model) {
 			m.browser = newBrowser(home)
+			m.openSources()
 			site := filepath.Join(home, "Work", "site")
 			m.browser.selected[site] = true
 			m.browser.selected[filepath.Join(home, ".ssh")] = true
@@ -88,6 +97,7 @@ func TestRenderPreview(t *testing.T) {
 		{"sources (excludes, too narrow for two columns)", mk(stateSources, func(m *model) {
 			m.Update(tea.WindowSizeMsg{Width: 64, Height: 24})
 			m.browser = newBrowser(home)
+			m.openSources()
 			site := filepath.Join(home, "Work", "site")
 			m.browser.selected[site] = true
 			m.addPattern(site, "node_modules")

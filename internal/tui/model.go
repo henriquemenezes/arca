@@ -54,13 +54,17 @@ const (
 )
 
 // sourcesMode is what the source screen is doing. The screen is one state with
-// three jobs — browsing, searching, and editing exclude patterns — and each of
-// them claims the keyboard differently, so the mode has to be decided before a
-// key ever reaches the browser.
+// several jobs — typing a directory, browsing one, searching, and editing
+// exclude patterns — and each of them claims the keyboard differently, so the
+// mode has to be decided before a key ever reaches the browser.
+//
+// The first two are the screen at rest, and tab moves between them. The other
+// two are opened by a key of their own and left with esc.
 type sourcesMode int
 
 const (
 	srcBrowse       sourcesMode = iota // the file list has the keys
+	srcPath                            // the directory line has them
 	srcFilter                          // the fuzzy search field has them
 	srcExcludes                        // the excludes panel has them
 	srcExcludeInput                    // typing a pattern into that panel
@@ -371,7 +375,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.browser.height = maxInt(6, msg.Height-14)
-		m.fitSearchField()
+		m.fitSourceFields()
 		m.bar.Width = minInt(60, maxInt(20, msg.Width-20))
 		return m, nil
 
