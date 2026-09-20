@@ -124,6 +124,13 @@ func (b *browser) load(dir string) {
 	})
 }
 
+// Update is the file list's keyboard.
+//
+// Going in and coming out are the two halves of one gesture, so they are one
+// pair of keys: right opens the highlighted directory, left leaves for the one
+// above. Enter opened a directory too, which left the screen with two ways in
+// and one way out, and a user who had learnt enter had no reason to guess that
+// coming back was a key they had never pressed.
 func (b *browser) Update(msg tea.KeyMsg) {
 	switch msg.String() {
 	case "up", "k":
@@ -139,17 +146,20 @@ func (b *browser) Update(msg tea.KeyMsg) {
 	case "G", "end":
 		b.cursor = len(b.list()) - 1
 		b.clampOffset()
-	case "enter", "right", "l":
+	case "right":
 		if e, ok := b.current(); ok && e.isDir {
 			b.load(e.path)
 		}
-	case "backspace", "left", "h":
+	case "left":
 		if parent := filepath.Dir(b.cwd); parent != b.cwd {
 			prev := b.cwd
 			b.load(parent)
 			b.focus(prev)
 		}
-	case "~":
+	case "h", "~":
+		// h for home. It was the vim "left" once, which is now the left
+		// arrow's alone; "~" stays because it is what a shell user's hand
+		// reaches for and it can mean nothing else here.
 		if home, err := os.UserHomeDir(); err == nil {
 			b.load(home)
 		}

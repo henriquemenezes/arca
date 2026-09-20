@@ -50,6 +50,12 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyUp}
 	case "down":
 		return tea.KeyMsg{Type: tea.KeyDown}
+	case "left":
+		return tea.KeyMsg{Type: tea.KeyLeft}
+	case "right":
+		return tea.KeyMsg{Type: tea.KeyRight}
+	case "backspace":
+		return tea.KeyMsg{Type: tea.KeyBackspace}
 	case "ctrl+d":
 		return tea.KeyMsg{Type: tea.KeyCtrlD}
 	}
@@ -303,16 +309,75 @@ func TestBrowserSelectionAndNavigation(t *testing.T) {
 	// Descend and come back; the cursor should land where we left.
 	b.cursor = 1
 	prev := b.entries[1].path
-	b.Update(key("enter"))
+	b.Update(key("right"))
 	if b.cwd != prev {
 		t.Fatalf("cwd = %q, want %q", b.cwd, prev)
 	}
-	b.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	b.Update(key("left"))
 	if b.cwd != root {
 		t.Fatalf("cwd = %q, want %q", b.cwd, root)
 	}
 	if got, _ := b.current(); got.path != prev {
 		t.Errorf("cursor landed on %q, want %q", got.path, prev)
+	}
+}
+
+func TestArrowsOpenAndLeaveADirectory(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "alpha"), 0o755)
+	os.MkdirAll(filepath.Join(root, "beta"), 0o755)
+
+	b := newBrowser(root)
+	b.Update(key("right"))
+	if b.cwd != filepath.Join(root, "alpha") {
+		t.Fatalf("right did not open the directory: cwd = %q", b.cwd)
+	}
+	b.Update(key("left"))
+	if b.cwd != root {
+		t.Fatalf("left did not go up: cwd = %q", b.cwd)
+	}
+	// Coming back lands on the directory just left, not at the top.
+	if got, _ := b.current(); filepath.Base(got.path) != "alpha" {
+		t.Errorf("cursor landed on %q, want alpha", got.path)
+	}
+}
+
+// Enter opened a directory too, which left the screen with two keys for going
+// in and only one for coming out.
+func TestOnlyTheArrowsNavigateDirectories(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "alpha"), 0o755)
+
+	for _, k := range []string{"enter", "l", "backspace"} {
+		b := newBrowser(root)
+		b.Update(key(k))
+		if b.cwd != root {
+			t.Errorf("%q moved the browser to %q; only the arrows navigate", k, b.cwd)
+		}
+	}
+}
+
+func TestHGoesHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory")
+	}
+	b := newBrowser(t.TempDir())
+	b.Update(key("h"))
+	if b.cwd != home {
+		t.Errorf("cwd = %q, want %q", b.cwd, home)
+	}
+}
+
+// h is home, so it cannot also be the vim "left". Going up is the left arrow,
+// and nothing else.
+func TestHDoesNotGoUp(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "child")
+	os.MkdirAll(root, 0o755)
+	b := newBrowser(root)
+	b.Update(key("h"))
+	if b.cwd == filepath.Dir(root) {
+		t.Error("h went up a directory")
 	}
 }
 
@@ -342,7 +407,7 @@ func TestBrowserSurvivesAnUnreadableDirectory(t *testing.T) {
 
 	b := newBrowser(root)
 	b.cursor = 0
-	b.Update(key("enter"))
+	b.Update(key("right"))
 	if b.err == nil {
 		t.Error("entering an unreadable directory should report an error")
 	}

@@ -155,8 +155,8 @@ func (m *model) sourcesHelp() string {
 	case srcExcludeInput:
 		return m.help("enter add", "esc cancel")
 	}
-	return m.help("↑↓ move", "enter open", "← up", "space select", "x exclude",
-		"X excludes", "/ find", ". hidden", "~ home", "tab continue", "esc back")
+	return m.help("↑↓ move", "→ open", "← up", "space select", "x exclude",
+		"X excludes", "/ find", ". hidden", "h home", "tab continue", "esc back")
 }
 
 func (m *model) viewMapping() string {
@@ -484,7 +484,8 @@ func (m *model) viewPickArchive() string {
 	var b strings.Builder
 	b.WriteString(header(title, "archive › open"))
 	b.WriteString(m.browser.View(m.width-6, nil))
-	return b.String() + m.help("↑↓ move", "enter open / choose", "← up", ". hidden", "~ home", "esc back")
+	return b.String() + m.help("↑↓ move", "→ open", "← up", "enter choose", ". hidden",
+		"h home", "esc back")
 }
 
 func (m *model) viewArchiveKey() string {
