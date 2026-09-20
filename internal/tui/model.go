@@ -54,13 +54,14 @@ const (
 )
 
 // sourcesMode is what the source screen is doing. The screen is one state with
-// two jobs — browsing and editing exclude patterns — and each of them claims
-// the keyboard differently, so the mode has to be decided before a key ever
-// reaches the browser.
+// three jobs — browsing, searching, and editing exclude patterns — and each of
+// them claims the keyboard differently, so the mode has to be decided before a
+// key ever reaches the browser.
 type sourcesMode int
 
 const (
 	srcBrowse       sourcesMode = iota // the file list has the keys
+	srcFilter                          // the fuzzy search field has them
 	srcExcludes                        // the excludes panel has them
 	srcExcludeInput                    // typing a pattern into that panel
 )
@@ -125,17 +126,19 @@ type model struct {
 	mapIndex int
 	editing  bool
 
+	// mode is which of the source screen's three jobs has the keyboard;
+	// excIndex and excInput belong to the excludes panel, and filterGen numbers
+	// the search sessions so a scan that outlived its filter can be ignored.
+	mode      sourcesMode
+	excIndex  int
+	excInput  textinput.Model
+	filterGen int
+
 	// sizes is what each chosen path holds, as the source screen's preview
 	// reports it; measuring is the ones a background walk has not finished.
 	// They are keyed by the absolute path the browser hands back, and kept for
 	// the whole session: walking a tree twice to learn the same thing is the
 	// one expensive mistake that screen can make.
-	// mode is which of the source screen's jobs has the keyboard; excIndex and
-	// excInput belong to the excludes panel.
-	mode     sourcesMode
-	excIndex int
-	excInput textinput.Model
-
 	sizes     map[string]sizeStat
 	measuring map[string]bool
 
@@ -368,6 +371,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.browser.height = maxInt(6, msg.Height-14)
+		m.fitSearchField()
 		m.bar.Width = minInt(60, maxInt(20, msg.Width-20))
 		return m, nil
 
@@ -395,6 +399,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		delete(m.measuring, msg.path)
 		m.sizes[msg.path] = msg.stat
 		return m, nil
+
+	case indexMsg:
+		// A batch from a search the user has already left changes nothing, and
+		// the scan behind it is on its way out anyway.
+		if !m.browser.filter.absorb(msg) {
+			return m, nil
+		}
+		cmd := m.browser.refilter()
+		if msg.done || msg.truncated {
+			return m, cmd
+		}
+		return m, tea.Batch(cmd, waitForIndex(msg.gen, m.browser.filter.ch))
 
 	case restoreDoneMsg:
 		if msg.err != nil {

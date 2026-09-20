@@ -83,11 +83,11 @@ func (m *model) chooseMenu() (tea.Model, tea.Cmd) {
 		m.push(stateSources)
 	case 1: // restore
 		m.intent = intentRestore
-		m.browser = newBrowser(defaultOutputDir())
+		m.resetBrowser(defaultOutputDir())
 		m.push(statePickArchive)
 	case 2: // inspect
 		m.intent = intentInspect
-		m.browser = newBrowser(defaultOutputDir())
+		m.resetBrowser(defaultOutputDir())
 		m.push(statePickArchive)
 	case 3: // identity
 		return m, m.generateIdentity()
@@ -101,8 +101,15 @@ func (m *model) chooseMenu() (tea.Model, tea.Cmd) {
 
 // ---------- backup: source selection ----------
 
+// keySources hands the keyboard to whichever of the screen's three jobs has it.
+//
+// The dispatch has to come first. The browser answers to bare letters — k, j,
+// g, G, h, l, ~, . — and this screen answers to q, so while a field is open
+// every one of those is a character being typed and not a command.
 func (m *model) keySources(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
+	case srcFilter:
+		return m.keyFilter(msg)
 	case srcExcludes:
 		return m.keyExcludes(msg)
 	case srcExcludeInput:
@@ -121,6 +128,8 @@ func (m *model) keyBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "tab", "ctrl+d":
 		return m.acceptSources()
+	case "/":
+		return m, m.openSearch()
 	case "x", "ctrl+x":
 		return m, m.excludeUnderCursor()
 	case "X":
@@ -133,6 +142,60 @@ func (m *model) keyBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Whatever the key did, it may have marked something new; the preview is
 	// what turns that into a count.
 	return m, m.measureSelection()
+}
+
+// keyFilter drives the search. Every printable key belongs to the query, so the
+// commands that survive here are the ones no path is ever spelled with: the
+// arrows, enter, and space — which no query needs as a character and which is
+// far too useful as "choose this one" to spend on one.
+//
+// tab completes rather than continuing, which is what it does on every other
+// screen that takes a path. Continuing is left to ctrl+d alone; a key that
+// completes on four screens and leaves on the fifth is a key nobody can trust.
+func (m *model) keyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.browser.closeFilter()
+		m.mode = srcBrowse
+		m.err = nil
+		return m, nil
+	case "tab":
+		return m, m.completeSearch()
+	case "ctrl+d":
+		return m.acceptSources()
+	case "up", "ctrl+p":
+		m.browser.move(-1)
+		return m, nil
+	case "down", "ctrl+n":
+		m.browser.move(1)
+		return m, nil
+	case "pgup":
+		m.browser.move(-m.browser.height)
+		return m, nil
+	case "pgdown":
+		m.browser.move(m.browser.height)
+		return m, nil
+	case " ":
+		m.browser.toggle()
+		return m, m.measureSelection()
+	case "ctrl+x":
+		return m, m.excludeUnderCursor()
+	case "ctrl+u":
+		m.browser.filter.input.SetValue("")
+		return m, m.browser.refilter()
+	case "enter":
+		// Opening a match ends the search: its index is of the tree the browser
+		// is about to leave.
+		if e, ok := m.browser.current(); ok && e.isDir {
+			m.browser.load(e.path)
+			m.mode = srcBrowse
+		}
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.browser.filter.input, cmd = m.browser.filter.input.Update(msg)
+	return m, tea.Batch(cmd, m.browser.refilter())
 }
 
 func (m *model) keyExcludes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -209,6 +272,72 @@ func (m *model) keyExcludeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// openSearch indexes the subtree below where the browser is standing.
+func (m *model) openSearch() tea.Cmd {
+	m.browser.filter.close()
+	m.filterGen++
+	f, cmd := openFilter(m.filterGen, m.browser.cwd)
+	m.browser.filter = f
+	m.browser.cursor, m.browser.offset = 0, 0
+	m.fitSearchField()
+	m.mode = srcFilter
+	m.err = nil
+	return tea.Batch(cmd, m.browser.refilter())
+}
+
+// completeSearch is the tab key: put the highlighted row into the query, whole.
+//
+// It is the same move on either side of the search's split. Completing a path
+// fills in the rest of it, the way the destination screens do. Completing a name
+// turns the query into the path it found, which is what the next keystroke then
+// lists the inside of — so tabbing through a tree and typing a name to jump
+// there are the same gesture, not two.
+//
+// A completed directory stops at its own name, without the separator that would
+// list the inside of it. What this screen is for is choosing a directory, and a
+// query ending in a separator lists the children instead — so "Down" and a tab
+// would fill in ~/Downloads and then take ~/Downloads itself off the screen,
+// leaving nothing for space to mark. Going inside is the second tab.
+func (m *model) completeSearch() tea.Cmd {
+	e, ok := m.browser.current()
+	if !ok {
+		return nil
+	}
+	f := m.browser.filter
+
+	// The path goes in whole, spelled the way the row spells it: the query and
+	// the list it produced should say the same thing about the same place.
+	//
+	// Once the query already spells this directory out there is nothing left to
+	// fill in, and the separator is what the key then means: list what is
+	// inside this.
+	value := e.path
+	if e.isDir && f.names(e.path) {
+		value += string(filepath.Separator)
+	}
+
+	f.input.SetValue(value)
+	f.input.CursorEnd()
+	m.browser.cursor, m.browser.offset = 0, 0
+	m.err = nil
+	return m.browser.refilter()
+}
+
+// fitSearchField holds the query field to the column the file list occupies.
+//
+// A typed-out path is longer than anything in the list beside it, and a field
+// left to its own width would widen that whole block and shove the preview
+// panel off the screen. The width has to be set here rather than while drawing:
+// textinput works out which part of a long value is visible when it handles a
+// key, so a width applied at render time is one keystroke late.
+func (m *model) fitSearchField() {
+	if m.browser.filter == nil {
+		return
+	}
+	browserWidth, _ := m.sourcesLayout()
+	m.browser.filter.input.Width = maxInt(8, browserWidth-2-len(searchPrompt))
+}
+
 // excludeUnderCursor is the x key, and works the same on a row the search found
 // as on one the directory listing did.
 func (m *model) excludeUnderCursor() tea.Cmd {
@@ -237,10 +366,22 @@ func (m *model) acceptSources() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// leaveSources puts the screen back at rest.
+// leaveSources puts the screen back at rest, which above all means stopping a
+// scan that would otherwise keep walking a home directory for a screen nobody
+// is looking at.
 func (m *model) leaveSources() {
+	m.browser.filter.close()
+	m.browser.filter = nil
 	m.excInput.Blur()
 	m.mode = srcBrowse
+}
+
+// resetBrowser points the browser at a new directory from another screen,
+// ending whatever the source screen was doing with the old one.
+func (m *model) resetBrowser(dir string) {
+	m.leaveSources()
+	m.browser = newBrowser(dir)
+	m.excIndex = 0
 }
 
 // rebuildMapping reconciles the browser's selection with the mapping already in
@@ -585,7 +726,7 @@ func (m *model) editConfig() tea.Cmd {
 	m.seedMapping(m.cfg)
 
 	home, _ := os.UserHomeDir()
-	m.browser = newBrowser(home)
+	m.resetBrowser(home)
 	for _, e := range m.mapping {
 		abs, err := config.ExpandPath(e.path)
 		if err != nil {
@@ -597,7 +738,7 @@ func (m *model) editConfig() tea.Cmd {
 		m.browser.selected[abs] = true
 	}
 	m.push(stateSources)
-	return nil
+	return m.measureSelection()
 }
 
 // newConfig starts over: nothing selected, nothing inherited, and the built-in
@@ -609,7 +750,7 @@ func (m *model) newConfig() tea.Cmd {
 	m.mapIndex = 0
 
 	home, _ := os.UserHomeDir()
-	m.browser = newBrowser(home)
+	m.resetBrowser(home)
 	m.push(stateSources)
 	return nil
 }

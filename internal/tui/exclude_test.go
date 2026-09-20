@@ -27,13 +27,6 @@ func excludeTree(t *testing.T) (root, source string) {
 	return root, source
 }
 
-// typed sends a pattern one key at a time, the way it is really entered.
-func typed(m *model, s string) {
-	for _, r := range s {
-		m.Update(key(string(r)))
-	}
-}
-
 // chosen opens the source screen with one path already marked and the cursor
 // standing on the thing inside it the test is about to exclude.
 func chosen(t *testing.T, source, inside string) *model {
@@ -41,7 +34,7 @@ func chosen(t *testing.T, source, inside string) *model {
 	m := sourcesModel(t, filepath.Dir(source), 100, 40)
 	m.browser.selected[source] = true
 	m.browser.load(source)
-	for i, e := range m.browser.entries {
+	for i, e := range m.browser.list() {
 		if e.path == filepath.Join(source, inside) {
 			m.browser.cursor = i
 			return m
@@ -129,7 +122,7 @@ func TestExcludeTogglesBackOff(t *testing.T) {
 	m := chosen(t, source, "node_modules")
 	send(m, "x")
 	m.browser.cursor = 0
-	for i, e := range m.browser.entries {
+	for i, e := range m.browser.list() {
 		if filepath.Base(e.path) == "node_modules" {
 			m.browser.cursor = i
 		}

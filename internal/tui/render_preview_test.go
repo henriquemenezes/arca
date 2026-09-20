@@ -24,6 +24,8 @@ func TestRenderPreview(t *testing.T) {
 	os.WriteFile(filepath.Join(home, ".ssh", "config"), []byte("Host x"), 0o644)
 	os.MkdirAll(filepath.Join(home, "Downloads"), 0o755)
 	os.WriteFile(filepath.Join(home, "Downloads", "big.bin"), make([]byte, 900000), 0o644)
+	os.MkdirAll(filepath.Join(home, ".config", "nvim", "lua"), 0o755)
+	os.MkdirAll(filepath.Join(home, ".local", "share", "nvim"), 0o755)
 	os.MkdirAll(filepath.Join(home, "Work", "site", "node_modules", "left-pad"), 0o755)
 	os.WriteFile(filepath.Join(home, "Work", "site", "index.js"), []byte("main"), 0o644)
 	os.WriteFile(filepath.Join(home, "Work", "site", "node_modules", "left-pad", "i.js"),
@@ -58,6 +60,18 @@ func TestRenderPreview(t *testing.T) {
 			m.Update(tea.WindowSizeMsg{Width: 64, Height: 24})
 			m.browser = newBrowser(home)
 			m.browser.selected[filepath.Join(home, ".ssh")] = true
+			run(m, m.measureSelection())
+		})},
+		{"sources (searching for a name)", mk(stateSources, func(m *model) {
+			m.browser = newBrowser(home)
+			m.browser.selected[filepath.Join(home, ".ssh")] = true
+			search(t, m, "nvim")
+			run(m, m.measureSelection())
+		})},
+		{"sources (typing a path)", mk(stateSources, func(m *model) {
+			m.browser = newBrowser(home)
+			m.browser.selected[filepath.Join(home, ".ssh")] = true
+			search(t, m, filepath.Join(home, "Work")+string(filepath.Separator))
 			run(m, m.measureSelection())
 		})},
 		{"sources (excludes)", mk(stateSources, func(m *model) {

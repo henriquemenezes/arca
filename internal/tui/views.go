@@ -66,6 +66,14 @@ func (m *model) fitMenu(head, foot string) {
 
 // ---------- backup flow ----------
 
+// viewSources is two columns: the browser on the left, and on the right what
+// the selection amounts to so far.
+//
+// The preview exists because the browser answers "where am I" but never "what
+// have I chosen". A selection is built across several directories, and until
+// this screen showed it, the only place the whole of it appeared was the next
+// screen — too late to notice that a home directory had been marked by
+// accident, or that the one thing being looked for is not in it.
 func (m *model) viewSources() string {
 	var b strings.Builder
 	b.WriteString(header("Choose what to back up", "backup › sources"))
@@ -137,13 +145,18 @@ func (m *model) selectionLine() string {
 // do nothing.
 func (m *model) sourcesHelp() string {
 	switch m.mode {
+	case srcFilter:
+		// What to type is on the line above, in the field itself, so the help
+		// is only keys here.
+		return m.help("↑↓ move", "tab complete", "space select", "ctrl+x exclude",
+			"enter open", "ctrl+u clear", "ctrl+d continue", "esc leave search")
 	case srcExcludes:
 		return m.help("↑↓ move", "a add pattern", "d remove", "esc back")
 	case srcExcludeInput:
 		return m.help("enter add", "esc cancel")
 	}
 	return m.help("↑↓ move", "enter open", "← up", "space select", "x exclude",
-		"X excludes", ". hidden", "~ home", "tab continue", "esc back")
+		"X excludes", "/ find", ". hidden", "~ home", "tab continue", "esc back")
 }
 
 func (m *model) viewMapping() string {

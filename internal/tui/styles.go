@@ -33,6 +33,7 @@ var (
 	stDir      = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
 	stMark     = lipgloss.NewStyle().Foreground(colOK).Bold(true)
 	stExclude  = lipgloss.NewStyle().Foreground(colDanger).Bold(true)
+	stHit      = lipgloss.NewStyle().Foreground(colWarn).Bold(true)
 
 	stPanel = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -111,8 +112,8 @@ func (m *model) pathListRows() int {
 }
 
 // help renders the key legend, wrapping onto further lines rather than running
-// off the side of the terminal. The source screen is what forces this: eight
-// keys is already more than 80 columns hold.
+// off the side of the terminal. The source screen is what forces this: it has
+// three modes and the widest of them lists more keys than 80 columns hold.
 func (m *model) help(keys ...string) string {
 	const sep = "  ·  "
 	width := m.width - 4 // the padding View puts around every screen
