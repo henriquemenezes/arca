@@ -480,6 +480,44 @@ func TestSourceSelectionFlowsIntoMapping(t *testing.T) {
 	}
 }
 
+// Enter continues here too. Editing a destination is what "e" is for; enter was
+// a second key for it, and the flow had no key for going on but tab.
+func TestEnterContinuesFromTheMapping(t *testing.T) {
+	m := newModel()
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.state = stateMapping
+	m.intentCfg = cfgFresh
+	m.mapping = []mapEntry{{path: "/home/u/Downloads"}}
+
+	send(m, "enter")
+	if m.state != stateCrypto {
+		t.Fatalf("enter did not continue: state = %v (err %v)", m.state, m.err)
+	}
+	if m.editing {
+		t.Error("enter opened the destination field instead of continuing")
+	}
+}
+
+func TestEIsWhatEditsADestination(t *testing.T) {
+	m := newModel()
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.state = stateMapping
+	m.mapping = []mapEntry{{path: "/home/u/Downloads"}}
+
+	send(m, "e")
+	if !m.editing {
+		t.Fatal("e did not open the destination field")
+	}
+	typed(m, "media")
+	send(m, "enter")
+	if m.editing {
+		t.Error("enter did not close the field")
+	}
+	if m.mapping[0].dest != "media" {
+		t.Errorf("dest = %q, want media", m.mapping[0].dest)
+	}
+}
+
 func TestPassphraseScreenRefusesWeakInput(t *testing.T) {
 	m := newModel()
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -740,7 +778,7 @@ func TestEditingKeepsWhatTheMappingScreenNeverAsks(t *testing.T) {
 
 	send(m, "e")      // review  → sources, already marked
 	send(m, "ctrl+d") // sources → mapping, destinations inherited
-	send(m, "tab")    // mapping → save screen
+	send(m, "enter")  // mapping → save screen
 	if m.state != stateSaveConfig {
 		t.Fatalf("state = %v (err %v), want the save screen", m.state, m.err)
 	}
@@ -949,7 +987,7 @@ func TestSkippingTheSaveLeavesTheDiskAlone(t *testing.T) {
 
 	// Drive the real route in, so the state the save screen inherits is the
 	// state an edit actually leaves behind.
-	send(m, "e", "ctrl+d", "tab")
+	send(m, "e", "ctrl+d", "enter")
 	if m.state != stateSaveConfig {
 		t.Fatalf("state = %v (err %v), want the save screen", m.state, m.err)
 	}
@@ -976,7 +1014,7 @@ func TestSkippingTheSaveLeavesTheDiskAlone(t *testing.T) {
 func TestReturningFromAnEditLandsOnTheReview(t *testing.T) {
 	m, _ := reviewing(t)
 
-	send(m, "e", "ctrl+d", "tab", "ctrl+d")
+	send(m, "e", "ctrl+d", "enter", "ctrl+d")
 	if m.state != stateReview {
 		t.Fatalf("state = %v, want review", m.state)
 	}

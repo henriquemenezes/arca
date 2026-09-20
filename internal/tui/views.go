@@ -159,7 +159,7 @@ func (m *model) sourcesHelp() string {
 		return m.help("enter add", "esc cancel")
 	}
 	return m.help("↑↓ move", "→ open", "← up", "space select", "d directory",
-		"h home", "x exclude", "X excludes", "/ find", ". hidden", "ctrl+d continue",
+		"h home", "x exclude", "X excludes", "/ find", ". hidden", "enter continue",
 		"esc back")
 }
 
@@ -187,7 +187,7 @@ func (m *model) viewMapping() string {
 		return b.String() + m.help("enter accept", "esc cancel")
 	}
 	return b.String() + m.help("↑↓ move", "e edit destination", "d remove",
-		"tab continue", "esc back")
+		"enter continue", "esc back")
 }
 
 func (m *model) viewCrypto() string {

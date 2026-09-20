@@ -131,7 +131,7 @@ func (m *model) keyBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "d":
 		return m, m.focusPath()
-	case "ctrl+d":
+	case "enter", "ctrl+d":
 		return m.acceptSources()
 	case "/":
 		return m, m.openSearch()
@@ -587,12 +587,12 @@ func (m *model) keyMapping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.mapIndex = len(m.mapping) - 1
 			}
 		}
-	case "e", "enter":
+	case "e":
 		m.editing = true
 		m.destInput.SetValue(m.mapping[m.mapIndex].dest)
 		m.destInput.CursorEnd()
 		return m, m.destInput.Focus()
-	case "tab", "ctrl+d":
+	case "enter", "ctrl+d":
 		cfg, err := m.buildConfig()
 		if err != nil {
 			m.fail(err)

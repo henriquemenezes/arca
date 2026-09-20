@@ -93,6 +93,19 @@ func TestEscTakesBackATypedPathBeforeTheFocus(t *testing.T) {
 	}
 }
 
+// Enter is what continues on every other screen, and the file list is where a
+// selection is finished.
+func TestEnterContinuesFromTheFileList(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "alpha"), 0o755)
+	m := pathModel(t, root)
+
+	send(m, " ", "enter")
+	if m.state != stateMapping {
+		t.Fatalf("enter did not continue: state = %v (err %v)", m.state, m.err)
+	}
+}
+
 // In the field enter is the field's: it goes to what was typed. Arriving is the
 // end of what the field was for, so the list takes the keys back with it.
 func TestEnterInTheFieldGoesAndHandsTheKeysBack(t *testing.T) {

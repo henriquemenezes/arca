@@ -268,7 +268,7 @@ func TestGroupExcludesSurviveAnEditWithSeveralSources(t *testing.T) {
 	m.state = stateReview
 	m.editConfig()
 	send(m, "ctrl+d") // sources → mapping
-	send(m, "tab")    // mapping → build
+	send(m, "enter")  // mapping → build
 
 	after, err := m.buildConfig()
 	if err != nil {
@@ -333,7 +333,7 @@ func TestAnExcludedPathNeverReachesTheArchive(t *testing.T) {
 	m := chosen(t, source, "node_modules")
 	send(m, "x") // leave node_modules out
 	send(m, "ctrl+d")
-	send(m, "tab") // through the mapping screen, building the configuration
+	send(m, "enter") // through the mapping screen, building the configuration
 
 	m.outPath = filepath.Join(out, "from-tui.tar.zst.age")
 	m.backupKey = &codec.Keyring{Passphrase: []byte("gaslight-tremor-unmasked-cufflink-shallot")}
