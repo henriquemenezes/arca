@@ -24,6 +24,10 @@ func TestRenderPreview(t *testing.T) {
 	os.WriteFile(filepath.Join(home, ".ssh", "config"), []byte("Host x"), 0o644)
 	os.MkdirAll(filepath.Join(home, "Downloads"), 0o755)
 	os.WriteFile(filepath.Join(home, "Downloads", "big.bin"), make([]byte, 900000), 0o644)
+	os.MkdirAll(filepath.Join(home, "Work", "site", "node_modules", "left-pad"), 0o755)
+	os.WriteFile(filepath.Join(home, "Work", "site", "index.js"), []byte("main"), 0o644)
+	os.WriteFile(filepath.Join(home, "Work", "site", "node_modules", "left-pad", "i.js"),
+		make([]byte, 40000), 0o644)
 
 	mk := func(s state, tweak func(*model)) *model {
 		m := newModel()
@@ -54,6 +58,26 @@ func TestRenderPreview(t *testing.T) {
 			m.Update(tea.WindowSizeMsg{Width: 64, Height: 24})
 			m.browser = newBrowser(home)
 			m.browser.selected[filepath.Join(home, ".ssh")] = true
+			run(m, m.measureSelection())
+		})},
+		{"sources (excludes)", mk(stateSources, func(m *model) {
+			m.browser = newBrowser(home)
+			site := filepath.Join(home, "Work", "site")
+			m.browser.selected[site] = true
+			m.browser.selected[filepath.Join(home, ".ssh")] = true
+			m.addPattern(site, "node_modules")
+			m.addPattern(site, "**/*.log")
+			m.mode = srcExcludes
+			m.excIndex = 1
+			run(m, m.measureSelection())
+		})},
+		{"sources (excludes, too narrow for two columns)", mk(stateSources, func(m *model) {
+			m.Update(tea.WindowSizeMsg{Width: 64, Height: 24})
+			m.browser = newBrowser(home)
+			site := filepath.Join(home, "Work", "site")
+			m.browser.selected[site] = true
+			m.addPattern(site, "node_modules")
+			m.mode = srcExcludes
 			run(m, m.measureSelection())
 		})},
 		{"mapping", mk(stateMapping, func(m *model) {

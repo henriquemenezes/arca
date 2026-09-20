@@ -149,7 +149,7 @@ func TestBrowserKeepsToItsColumn(t *testing.T) {
 	os.WriteFile(filepath.Join(root, strings.Repeat("long-name-", 8)), []byte("x"), 0o644)
 
 	b := newBrowser(root)
-	for _, line := range strings.Split(strings.TrimRight(b.View(30), "\n"), "\n") {
+	for _, line := range strings.Split(strings.TrimRight(b.View(30, nil), "\n"), "\n") {
 		if w := lipgloss.Width(line); w > 30 {
 			t.Errorf("line is %d columns wide, want at most 30: %q", w, line)
 		}

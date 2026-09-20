@@ -53,6 +53,18 @@ const (
 	cfgNew                    // replacing it with one built from scratch
 )
 
+// sourcesMode is what the source screen is doing. The screen is one state with
+// two jobs — browsing and editing exclude patterns — and each of them claims
+// the keyboard differently, so the mode has to be decided before a key ever
+// reaches the browser.
+type sourcesMode int
+
+const (
+	srcBrowse       sourcesMode = iota // the file list has the keys
+	srcExcludes                        // the excludes panel has them
+	srcExcludeInput                    // typing a pattern into that panel
+)
+
 // mapEntry is one chosen source and the directory it lands in inside the
 // archive. Member previews the final name, which is what makes the mapping
 // concrete while the user is still deciding.
@@ -97,12 +109,16 @@ type model struct {
 	intentCfg cfgIntent
 	base      *config.Config
 
-	// destName and destExclude remember, per destination, what a configuration
-	// file said about the group that owned it. The mapping screen works in
-	// destinations, so this is how a group keeps its name and its exclude
-	// patterns across an edit.
-	destName    map[string]string
-	destExclude map[string][]string
+	// destName remembers, per destination, what a configuration file called the
+	// group that owned it. The mapping screen works in destinations, so this is
+	// how a group keeps its name across an edit.
+	destName map[string]string
+
+	// srcExclude holds the exclude patterns, keyed by the absolute path of the
+	// source they were chosen under. A pattern belongs to a group in the file,
+	// and a group is a destination the source screen has not reached yet, so
+	// buildConfig is where they are unioned back per destination.
+	srcExclude map[string][]string
 
 	browser  browser
 	mapping  []mapEntry
@@ -114,6 +130,12 @@ type model struct {
 	// They are keyed by the absolute path the browser hands back, and kept for
 	// the whole session: walking a tree twice to learn the same thing is the
 	// one expensive mistake that screen can make.
+	// mode is which of the source screen's jobs has the keyboard; excIndex and
+	// excInput belong to the excludes panel.
+	mode     sourcesMode
+	excIndex int
+	excInput textinput.Model
+
 	sizes     map[string]sizeStat
 	measuring map[string]bool
 
@@ -221,7 +243,10 @@ func newModel() *model {
 		cfgInput:    newPathInput(cli.ConfigFileName, 60),
 		sizes:       map[string]sizeStat{},
 		measuring:   map[string]bool{},
+		srcExclude:  map[string][]string{},
+		destName:    map[string]string{},
 	}
+	m.excInput = mk("**/node_modules", 28)
 	m.passInput = mk("passphrase", 48)
 	m.passInput.EchoMode = textinput.EchoPassword
 	m.confirmPass = mk("confirm", 48)
@@ -299,17 +324,17 @@ func (m *model) hasConfig() bool { return m.cfg != nil && len(m.cfg.Groups) > 0 
 //
 // Two groups may share a destination — nothing forbids it, since only the names
 // have to be unique — and the mapping screen cannot tell them apart, so they
-// merge: the first name wins and the exclude patterns are unioned.
+// merge and the first name wins. The exclude patterns go to the sources that
+// carry them, which is where the source screen can show and edit them.
 func (m *model) adoptConfig(cfg *config.Config) {
 	m.base = cfg
 	m.destName = map[string]string{}
-	m.destExclude = map[string][]string{}
 	for _, g := range cfg.Groups {
 		if _, seen := m.destName[g.Dest]; !seen {
 			m.destName[g.Dest] = g.Name
 		}
-		m.destExclude[g.Dest] = appendUnique(m.destExclude[g.Dest], g.Exclude)
 	}
+	m.seedExcludes(cfg)
 }
 
 // seedMapping fills the mapping screen from a configuration, keeping each path
@@ -509,12 +534,17 @@ func (m *model) buildConfig() (*config.Config, error) {
 	}
 
 	byDest := map[string][]config.Source{}
+	excByDest := map[string][]string{}
 	var order []string
 	for _, e := range m.mapping {
 		if _, seen := byDest[e.dest]; !seen {
 			order = append(order, e.dest)
 		}
 		byDest[e.dest] = append(byDest[e.dest], config.Source{Path: e.path, As: e.as})
+		// A pattern is chosen against one source but stored against the group,
+		// because that is the only place the file has for it. Sources sharing a
+		// destination therefore share their exclusions.
+		excByDest[e.dest] = appendUnique(excByDest[e.dest], m.excludesFor(e.path))
 	}
 	for i, dest := range order {
 		name := m.destName[dest]
@@ -528,7 +558,7 @@ func (m *model) buildConfig() (*config.Config, error) {
 			Name:    name,
 			Dest:    dest,
 			Sources: byDest[dest],
-			Exclude: append([]string(nil), m.destExclude[dest]...),
+			Exclude: append([]string(nil), excByDest[dest]...),
 		})
 	}
 	if err := cfg.Validate(); err != nil {

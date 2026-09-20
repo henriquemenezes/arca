@@ -102,27 +102,145 @@ func (m *model) chooseMenu() (tea.Model, tea.Cmd) {
 // ---------- backup: source selection ----------
 
 func (m *model) keySources(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.mode {
+	case srcExcludes:
+		return m.keyExcludes(msg)
+	case srcExcludeInput:
+		return m.keyExcludeInput(msg)
+	}
+	return m.keyBrowse(msg)
+}
+
+func (m *model) keyBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
+		m.leaveSources()
 		m.pop()
 		return m, nil
 	case "q":
 		return m, tea.Quit
 	case "tab", "ctrl+d":
-		sel := m.browser.Selected()
-		if len(sel) == 0 {
-			m.fail(errors.New("nothing selected yet: highlight a file or directory and press space"))
-			return m, nil
-		}
-		m.mapping = rebuildMapping(m.mapping, sel)
-		m.mapIndex = 0
-		m.push(stateMapping)
+		return m.acceptSources()
+	case "x", "ctrl+x":
+		return m, m.excludeUnderCursor()
+	case "X":
+		m.mode = srcExcludes
+		m.excIndex = 0
+		m.err = nil
 		return m, nil
 	}
 	m.browser.Update(msg)
 	// Whatever the key did, it may have marked something new; the preview is
 	// what turns that into a count.
 	return m, m.measureSelection()
+}
+
+func (m *model) keyExcludes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	rows := m.excludeRows()
+	cursor := m.excludeCursor(rows)
+
+	switch msg.String() {
+	case "esc":
+		m.mode = srcBrowse
+		m.err = nil
+		return m, nil
+	case "q":
+		return m, tea.Quit
+	case "tab", "ctrl+d":
+		return m.acceptSources()
+	case "up", "k":
+		m.excIndex = maxInt(0, cursor-1)
+	case "down", "j":
+		m.excIndex = minInt(maxInt(0, len(rows)-1), cursor+1)
+	case "a", "enter":
+		if len(rows) == 0 {
+			m.fail(errors.New("choose a path first: an exclusion is always something left out of one"))
+			return m, nil
+		}
+		m.excIndex = cursor
+		m.excInput.SetValue("")
+		m.mode = srcExcludeInput
+		m.err = nil
+		return m, m.excInput.Focus()
+	case "d", "x":
+		if len(rows) == 0 {
+			return m, nil
+		}
+		if rows[cursor].pattern == "" {
+			m.fail(errors.New("that row is the source itself; move onto one of its patterns to remove it"))
+			return m, nil
+		}
+		m.removePattern(rows[cursor])
+		m.excIndex = maxInt(0, cursor-1)
+		m.err = nil
+		return m, m.measureSelection()
+	}
+	return m, nil
+}
+
+func (m *model) keyExcludeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.excInput.Blur()
+		m.mode = srcExcludes
+		m.err = nil
+		return m, nil
+	case "enter":
+		rows := m.excludeRows()
+		if len(rows) == 0 {
+			m.excInput.Blur()
+			m.mode = srcExcludes
+			return m, nil
+		}
+		source := rows[m.excludeCursor(rows)].source
+		if err := m.addPattern(source, m.excInput.Value()); err != nil {
+			m.fail(err)
+			return m, nil
+		}
+		m.excInput.SetValue("")
+		m.excInput.Blur()
+		m.mode = srcExcludes
+		m.err = nil
+		return m, m.measureSelection()
+	}
+
+	var cmd tea.Cmd
+	m.excInput, cmd = m.excInput.Update(msg)
+	return m, cmd
+}
+
+// excludeUnderCursor is the x key, and works the same on a row the search found
+// as on one the directory listing did.
+func (m *model) excludeUnderCursor() tea.Cmd {
+	e, ok := m.browser.current()
+	if !ok {
+		return nil
+	}
+	if err := m.toggleExclude(e.path); err != nil {
+		m.fail(err)
+		return nil
+	}
+	m.err = nil
+	return m.measureSelection()
+}
+
+func (m *model) acceptSources() (tea.Model, tea.Cmd) {
+	sel := m.browser.Selected()
+	if len(sel) == 0 {
+		m.fail(errors.New("nothing selected yet: highlight a file or directory and press space"))
+		return m, nil
+	}
+	m.leaveSources()
+	m.mapping = rebuildMapping(m.mapping, sel)
+	m.mapIndex = 0
+	m.push(stateMapping)
+	return m, nil
+}
+
+// leaveSources puts the screen back at rest.
+func (m *model) leaveSources() {
+	m.excInput.Blur()
+	m.mode = srcBrowse
 }
 
 // rebuildMapping reconciles the browser's selection with the mapping already in

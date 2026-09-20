@@ -32,6 +32,7 @@ var (
 	stSelected = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
 	stDir      = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
 	stMark     = lipgloss.NewStyle().Foreground(colOK).Bold(true)
+	stExclude  = lipgloss.NewStyle().Foreground(colDanger).Bold(true)
 
 	stPanel = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

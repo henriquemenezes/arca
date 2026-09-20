@@ -179,7 +179,9 @@ func (b *browser) Selected() []string {
 	return out
 }
 
-func (b *browser) View(width int) string {
+// View draws the list. excluded says which rows are left out by an exclude
+// pattern; it may be nil on the screens that have none.
+func (b *browser) View(width int, excluded func(string) bool) string {
 	var sb strings.Builder
 	sb.WriteString(stMuted.Render(shorten(b.cwd, width-2)) + "\n\n")
 
@@ -198,8 +200,11 @@ func (b *browser) View(width int) string {
 		e := b.entries[i]
 
 		mark := "  "
-		if b.selected[e.path] {
+		switch {
+		case b.selected[e.path]:
 			mark = stMark.Render("● ")
+		case excluded != nil && excluded(e.path):
+			mark = stExclude.Render("✗ ")
 		}
 
 		// The cursor and the mark are drawn before the name, and the screen is

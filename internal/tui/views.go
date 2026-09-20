@@ -73,26 +73,48 @@ func (m *model) viewSources() string {
 	browserWidth, previewWidth := m.sourcesLayout()
 	rows := maxInt(3, m.browser.height)
 
+	// A terminal too narrow for two columns still has to be able to edit the
+	// patterns, so there the panel takes the whole width while it has focus and
+	// the file list stands down.
 	if previewWidth == 0 {
-		b.WriteString(strings.TrimRight(m.browser.View(browserWidth), "\n") + "\n")
+		if m.editingExcludes() {
+			b.WriteString(m.viewExcludes(browserWidth-2, rows) + "\n")
+			return b.String() + m.sourcesHelp()
+		}
+		b.WriteString(strings.TrimRight(m.browser.View(browserWidth, m.excluded), "\n") + "\n")
 		b.WriteString("\n" + stMuted.Render(m.selectionLine()) + "\n")
 		return b.String() + m.sourcesHelp()
 	}
 
-	left := strings.TrimRight(m.browser.View(browserWidth), "\n")
+	left := strings.TrimRight(m.browser.View(browserWidth, m.excluded), "\n")
 
 	// The panel spends the same rows the file list does, so the two columns
-	// start and end together however tall the terminal is. Its width is what
-	// it occupies inside its border, and its padding comes out of that; the
-	// text is laid out against what is left.
-	right := stPanel.MarginLeft(previewGap).BorderForeground(colFaint).
-		Width(previewWidth - 2).Height(rows).Render(m.viewSelectionPreview(previewWidth-4, rows))
+	// start and end together however tall the terminal is.
+	// The panel's width is what it occupies inside its border, and its padding
+	// comes out of that; the text is laid out against what is left.
+	inner := previewWidth - 4
+	body := m.viewSelectionPreview(inner, rows)
+	border := colFaint
+	if m.editingExcludes() {
+		body = m.viewExcludes(inner, rows)
+		// The border is the only thing that says which column the keys are
+		// going to, and on this screen that changes.
+		border = colAccent
+	}
+	right := stPanel.MarginLeft(previewGap).BorderForeground(border).
+		Width(previewWidth - 2).Height(rows).Render(body)
 
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n")
 	return b.String() + m.sourcesHelp()
 }
 
-// selectionLine is what the narrow layout says instead of the panel.
+// editingExcludes says the excludes panel has the keyboard.
+func (m *model) editingExcludes() bool {
+	return m.mode == srcExcludes || m.mode == srcExcludeInput
+}
+
+// selectionLine is the one-line form of the preview, for a terminal too narrow
+// to carry the panel.
 func (m *model) selectionLine() string {
 	if len(m.browser.selected) == 0 {
 		return "Nothing chosen yet; space marks the highlighted item."
@@ -101,15 +123,27 @@ func (m *model) selectionLine() string {
 	line := fmt.Sprintf("%s selected · %s · %s",
 		cli.Count(len(m.browser.selected), "item", "items"),
 		cli.Count(files, "file", "files"), humanBytes(bytes))
+	if n := m.excludeCount(); n > 0 {
+		line += " · " + cli.Count(n, "exclude", "excludes")
+	}
 	if pending > 0 {
 		line += " · counting…"
 	}
 	return line
 }
 
+// sourcesHelp lists the keys the screen is currently listening for. Each mode
+// takes the keyboard whole, so showing all of them at once would name keys that
+// do nothing.
 func (m *model) sourcesHelp() string {
-	return m.help("↑↓ move", "enter open", "← up", "space select", ". hidden",
-		"~ home", "tab continue", "esc back")
+	switch m.mode {
+	case srcExcludes:
+		return m.help("↑↓ move", "a add pattern", "d remove", "esc back")
+	case srcExcludeInput:
+		return m.help("enter add", "esc cancel")
+	}
+	return m.help("↑↓ move", "enter open", "← up", "space select", "x exclude",
+		"X excludes", ". hidden", "~ home", "tab continue", "esc back")
 }
 
 func (m *model) viewMapping() string {
@@ -436,7 +470,7 @@ func (m *model) viewPickArchive() string {
 	}
 	var b strings.Builder
 	b.WriteString(header(title, "archive › open"))
-	b.WriteString(m.browser.View(m.width - 6))
+	b.WriteString(m.browser.View(m.width-6, nil))
 	return b.String() + m.help("↑↓ move", "enter open / choose", "← up", ". hidden", "~ home", "esc back")
 }
 

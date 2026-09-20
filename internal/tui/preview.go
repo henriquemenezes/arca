@@ -54,7 +54,7 @@ func (m *model) measureSelection() tea.Cmd {
 			continue
 		}
 		m.measuring[p] = true
-		cmds = append(cmds, measurePath(p, opts))
+		cmds = append(cmds, measurePath(p, opts, m.srcExclude[p]))
 	}
 	if len(cmds) == 0 {
 		return nil
@@ -63,7 +63,9 @@ func (m *model) measureSelection() tea.Cmd {
 }
 
 // walkOptions mirrors the settings the backup will actually run with, so the
-// preview counts what the plan will count.
+// preview counts what the plan will count. The exclude patterns are not part of
+// them — the walker takes those per source rather than per run — so measurePath
+// carries them separately.
 func (m *model) walkOptions() walk.Options {
 	settings := config.Default().Settings
 	switch {
@@ -85,7 +87,7 @@ func (m *model) walkOptions() walk.Options {
 // The patterns go in because the number is a promise about what the archive
 // will hold. Counting a tree the backup is about to leave half of behind would
 // make the panel state a size no run of the tool ever produces.
-func measurePath(path string, opts walk.Options) tea.Cmd {
+func measurePath(path string, opts walk.Options, exclude []string) tea.Cmd {
 	return func() tea.Msg {
 		// Asking first tells a path that is gone apart from one that cannot be
 		// read; the walker reports both as "no source exists".
@@ -93,8 +95,9 @@ func measurePath(path string, opts walk.Options) tea.Cmd {
 			return sizeMsg{path: path, stat: sizeStat{err: err}}
 		}
 		src := config.ResolvedSource{
-			Path:   path,
-			Member: filepath.Base(path),
+			Path:    path,
+			Member:  filepath.Base(path),
+			Exclude: exclude,
 		}
 		res, err := walk.Walk([]config.ResolvedSource{src}, opts, func(walk.Entry) error { return nil })
 		if err != nil {
@@ -171,6 +174,9 @@ func (m *model) viewSelectionPreview(width, rows int) string {
 		count += " · counting…"
 	} else {
 		count += " selected"
+	}
+	if n := m.excludeCount(); n > 0 {
+		count += " · " + cli.Count(n, "exclude", "excludes")
 	}
 	lines = append(lines, "", stMuted.Render(count),
 		stKey.Render(fmt.Sprintf("%s · %s", cli.Count(files, "file", "files"), humanBytes(bytes))))
