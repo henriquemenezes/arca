@@ -97,7 +97,7 @@ func TestRenderPreview(t *testing.T) {
 		{"mapping", mk(stateMapping, func(m *model) {
 			m.mapping = []mapEntry{
 				{path: filepath.Join(home, ".ssh"), dest: "dotfiles"},
-				{path: filepath.Join(home, "Downloads"), dest: "Downloads"},
+				{path: filepath.Join(home, "Downloads"), dest: ""},
 			}
 		})},
 		{"encryption", mk(stateCrypto, nil)},
@@ -114,7 +114,7 @@ func TestRenderPreview(t *testing.T) {
 		{"review", mk(stateReview, func(m *model) {
 			m.mapping = []mapEntry{
 				{path: filepath.Join(home, ".ssh"), dest: "dotfiles"},
-				{path: filepath.Join(home, "Downloads"), dest: "Downloads"},
+				{path: filepath.Join(home, "Downloads"), dest: ""},
 			}
 			cfg, err := m.buildConfig()
 			if err != nil {
@@ -129,7 +129,7 @@ func TestRenderPreview(t *testing.T) {
 		{"save configuration", mk(stateSaveConfig, func(m *model) {
 			m.mapping = []mapEntry{
 				{path: filepath.Join(home, ".ssh"), dest: "dotfiles"},
-				{path: filepath.Join(home, "Downloads"), dest: "Downloads"},
+				{path: filepath.Join(home, "Downloads"), dest: ""},
 			}
 			cfg, err := m.buildConfig()
 			if err != nil {

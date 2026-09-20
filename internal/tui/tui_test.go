@@ -78,16 +78,91 @@ func TestMemberPreviewMatchesWhatTheArchiveWillHold(t *testing.T) {
 	}
 }
 
-func TestSuggestDestGroupsDotfiles(t *testing.T) {
-	for path, want := range map[string]string{
-		"/home/u/.ssh":      "dotfiles",
-		"/home/u/.aws":      "dotfiles",
-		"/home/u/Downloads": "Downloads",
-		"/home/u/Work":      "Work",
-	} {
-		if got := suggestDest(path); got != want {
-			t.Errorf("suggestDest(%q) = %q, want %q", path, got, want)
+// A plain directory is already named; it lands at the archive root so that it
+// keeps that name and nothing more. Suggesting its own basename as the
+// destination is what used to store Downloads as Downloads/Downloads.
+func TestSuggestDestSendsAPlainPathToTheArchiveRoot(t *testing.T) {
+	for _, path := range []string{"/home/u/Downloads", "/home/u/Work", "/home/u/notes.txt"} {
+		if got := suggestDest(path); got != "" {
+			t.Errorf("suggestDest(%q) = %q, want the archive root", path, got)
 		}
+		want := filepath.Base(path)
+		if got := (mapEntry{path: path, dest: suggestDest(path)}).member(); got != want {
+			t.Errorf("%s is stored as %q, want %q", path, got, want)
+		}
+	}
+}
+
+// A dotfile is the exception: its name begins with a dot precisely because
+// it is not meant to be seen, and a dozen of them loose at the archive root
+// is what the grouping avoids.
+func TestSuggestDestGroupsDotfiles(t *testing.T) {
+	for _, path := range []string{"/home/u/.ssh", "/home/u/.aws"} {
+		if got := suggestDest(path); got != "dotfiles" {
+			t.Errorf("suggestDest(%q) = %q, want dotfiles", path, got)
+		}
+	}
+}
+
+// The group at the archive root still needs a name, and the file is easier to
+// read if it is not called group-1.
+func TestBuildConfigNamesTheRootGroup(t *testing.T) {
+	m := newModel()
+	m.mapping = []mapEntry{{path: "/home/u/Downloads", dest: ""}}
+	cfg, err := m.buildConfig()
+	if err != nil {
+		t.Fatalf("buildConfig: %v", err)
+	}
+	if cfg.Groups[0].Name != "root" {
+		t.Errorf("the root group is called %q, want root", cfg.Groups[0].Name)
+	}
+}
+
+// A configuration may already call one of its groups "root", and two groups
+// may not share a name — so the fallback has to give way rather than build a
+// configuration the engine rejects.
+func TestBuildConfigKeepsTheRootNameUnique(t *testing.T) {
+	m := newModel()
+	m.destName = map[string]string{"Work": "root"}
+	m.mapping = []mapEntry{
+		{path: "/home/u/src", dest: "Work"},
+		{path: "/home/u/Downloads", dest: ""},
+	}
+	cfg, err := m.buildConfig()
+	if err != nil {
+		t.Fatalf("buildConfig: %v", err)
+	}
+	if cfg.Groups[0].Name == cfg.Groups[1].Name {
+		t.Errorf("both groups are called %q", cfg.Groups[0].Name)
+	}
+}
+
+// Most sources now land at the archive root, so reopening a saved
+// configuration has to leave that group exactly as it was: a root group that
+// came back renamed, or nested one level deeper each time, would rewrite the
+// archive layout on every edit.
+func TestARootGroupSurvivesAnEditRoundTrip(t *testing.T) {
+	m := newModel()
+	m.mapping = []mapEntry{
+		{path: "/home/u/Downloads", dest: suggestDest("/home/u/Downloads")},
+		{path: "/home/u/.ssh", dest: suggestDest("/home/u/.ssh")},
+	}
+	first, err := m.buildConfig()
+	if err != nil {
+		t.Fatalf("buildConfig: %v", err)
+	}
+
+	// Reopen it the way the menu does with an arca.toml found on disk.
+	again := newModel()
+	again.adoptConfig(first)
+	again.seedMapping(first)
+	second, err := again.buildConfig()
+	if err != nil {
+		t.Fatalf("rebuilding the adopted configuration: %v", err)
+	}
+
+	if !reflect.DeepEqual(first.Groups, second.Groups) {
+		t.Errorf("the round trip changed the groups:\n%+v\n%+v", first.Groups, second.Groups)
 	}
 }
 

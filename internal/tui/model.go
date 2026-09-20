@@ -562,14 +562,28 @@ func (m *model) buildConfig() (*config.Config, error) {
 		// destination therefore share their exclusions.
 		excByDest[e.dest] = appendUnique(excByDest[e.dest], m.excludesFor(e.path))
 	}
+	// Every group needs a name, and no two may share one.
+	used := map[string]bool{}
 	for i, dest := range order {
 		name := m.destName[dest]
 		if name == "" {
 			name = dest
 		}
 		if name == "" {
-			name = fmt.Sprintf("group-%d", i+1)
+			// The archive root has no directory to be named after, and it is
+			// now where most sources land, so it is worth a better name than
+			// group-1.
+			name = "root"
 		}
+		// A configuration the user is editing may already have a group called
+		// what the fallback just picked.
+		if used[name] {
+			stem := name
+			for n := i + 1; used[name]; n++ {
+				name = fmt.Sprintf("%s-%d", stem, n)
+			}
+		}
+		used[name] = true
 		cfg.Groups = append(cfg.Groups, config.Group{
 			Name:    name,
 			Dest:    dest,

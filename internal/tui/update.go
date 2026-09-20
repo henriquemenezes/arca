@@ -421,14 +421,22 @@ func rebuildMapping(prev []mapEntry, selected []string) []mapEntry {
 	return out
 }
 
-// suggestDest proposes a destination that matches how people usually group
-// things: dotfiles together, everything else under its own name.
+// suggestDest guesses where a newly chosen path should land inside the
+// archive.
+//
+// The archive root is the answer for almost everything, because a source
+// already keeps its own name under whatever destination it is given: naming
+// the destination after the source too is what stored ~/Downloads as
+// Downloads/Downloads, and a single file as notes.txt/notes.txt.
+//
+// Dotfiles are the exception. Their names begin with a dot precisely because
+// they are not meant to be seen, and a dozen of them loose at the root is a
+// worse archive than one directory holding all of them.
 func suggestDest(path string) string {
-	base := filepath.Base(path)
-	if strings.HasPrefix(base, ".") {
+	if strings.HasPrefix(filepath.Base(path), ".") {
 		return "dotfiles"
 	}
-	return base
+	return ""
 }
 
 // ---------- backup: mapping ----------
