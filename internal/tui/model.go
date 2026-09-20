@@ -109,6 +109,14 @@ type model struct {
 	mapIndex int
 	editing  bool
 
+	// sizes is what each chosen path holds, as the source screen's preview
+	// reports it; measuring is the ones a background walk has not finished.
+	// They are keyed by the absolute path the browser hands back, and kept for
+	// the whole session: walking a tree twice to learn the same thing is the
+	// one expensive mistake that screen can make.
+	sizes     map[string]sizeStat
+	measuring map[string]bool
+
 	menu        list.Model
 	cryptoIndex int
 
@@ -211,6 +219,8 @@ func newModel() *model {
 		outInput:    newPathInput(".", 60),
 		targetInput: newPathInput("./restored", 60),
 		cfgInput:    newPathInput(cli.ConfigFileName, 60),
+		sizes:       map[string]sizeStat{},
+		measuring:   map[string]bool{},
 	}
 	m.passInput = mk("passphrase", 48)
 	m.passInput.EchoMode = textinput.EchoPassword
@@ -354,6 +364,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.result = msg.res
 		m.state = stateDone
+		return m, nil
+
+	case sizeMsg:
+		delete(m.measuring, msg.path)
+		m.sizes[msg.path] = msg.stat
 		return m, nil
 
 	case restoreDoneMsg:

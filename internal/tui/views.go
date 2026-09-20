@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/hamsa/arca/internal/cli"
 	"github.com/hamsa/arca/internal/secret"
 )
@@ -67,10 +69,47 @@ func (m *model) fitMenu(head, foot string) {
 func (m *model) viewSources() string {
 	var b strings.Builder
 	b.WriteString(header("Choose what to back up", "backup › sources"))
-	b.WriteString(m.browser.View(m.width - 6))
-	b.WriteString("\n" + stMuted.Render(fmt.Sprintf("%s selected",
-		cli.Count(len(m.browser.selected), "item", "items"))) + "\n")
-	return b.String() + m.help("↑↓ move", "enter open", "← up", "space select", ". hidden", "~ home", "tab continue", "esc back")
+
+	browserWidth, previewWidth := m.sourcesLayout()
+	rows := maxInt(3, m.browser.height)
+
+	if previewWidth == 0 {
+		b.WriteString(strings.TrimRight(m.browser.View(browserWidth), "\n") + "\n")
+		b.WriteString("\n" + stMuted.Render(m.selectionLine()) + "\n")
+		return b.String() + m.sourcesHelp()
+	}
+
+	left := strings.TrimRight(m.browser.View(browserWidth), "\n")
+
+	// The panel spends the same rows the file list does, so the two columns
+	// start and end together however tall the terminal is. Its width is what
+	// it occupies inside its border, and its padding comes out of that; the
+	// text is laid out against what is left.
+	right := stPanel.MarginLeft(previewGap).BorderForeground(colFaint).
+		Width(previewWidth - 2).Height(rows).Render(m.viewSelectionPreview(previewWidth-4, rows))
+
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n")
+	return b.String() + m.sourcesHelp()
+}
+
+// selectionLine is what the narrow layout says instead of the panel.
+func (m *model) selectionLine() string {
+	if len(m.browser.selected) == 0 {
+		return "Nothing chosen yet; space marks the highlighted item."
+	}
+	files, bytes, pending := m.selectionTotals()
+	line := fmt.Sprintf("%s selected · %s · %s",
+		cli.Count(len(m.browser.selected), "item", "items"),
+		cli.Count(files, "file", "files"), humanBytes(bytes))
+	if pending > 0 {
+		line += " · counting…"
+	}
+	return line
+}
+
+func (m *model) sourcesHelp() string {
+	return m.help("↑↓ move", "enter open", "← up", "space select", ". hidden",
+		"~ home", "tab continue", "esc back")
 }
 
 func (m *model) viewMapping() string {

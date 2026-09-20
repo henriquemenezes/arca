@@ -44,6 +44,17 @@ func TestRenderPreview(t *testing.T) {
 		{"sources", mk(stateSources, func(m *model) {
 			m.browser = newBrowser(home)
 			m.browser.selected[filepath.Join(home, ".ssh")] = true
+			m.browser.selected[filepath.Join(home, "Downloads")] = true
+			run(m, m.measureSelection())
+		})},
+		{"sources (nothing chosen)", mk(stateSources, func(m *model) {
+			m.browser = newBrowser(home)
+		})},
+		{"sources (too narrow for the preview)", mk(stateSources, func(m *model) {
+			m.Update(tea.WindowSizeMsg{Width: 64, Height: 24})
+			m.browser = newBrowser(home)
+			m.browser.selected[filepath.Join(home, ".ssh")] = true
+			run(m, m.measureSelection())
 		})},
 		{"mapping", mk(stateMapping, func(m *model) {
 			m.mapping = []mapEntry{

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // browser is a small directory walker with multi-selection.
@@ -200,23 +201,46 @@ func (b *browser) View(width int) string {
 		if b.selected[e.path] {
 			mark = stMark.Render("● ")
 		}
-		name := e.name
+
+		// The cursor and the mark are drawn before the name, and the screen is
+		// now sharing its width with the preview panel, so the name gets
+		// whatever is left and not a column more.
+		room := width - 4
+		text := clip(e.name, room)
 		if e.isDir {
-			name = stDir.Render(name + "/")
+			text = clip(e.name+"/", room)
 		}
+
+		style := lipgloss.NewStyle()
+		switch {
+		case i == b.cursor:
+			style = stSelected
+		case e.isDir:
+			style = stDir
+		}
+
 		cursor := "  "
 		if i == b.cursor {
 			cursor = stSelected.Render("▸ ")
-			if !e.isDir {
-				name = stSelected.Render(e.name)
-			}
 		}
-		sb.WriteString(cursor + mark + name + "\n")
+		sb.WriteString(cursor + mark + style.Render(text) + "\n")
 	}
 	if len(b.entries) > b.height {
 		sb.WriteString(stCrumb.Render(fmt.Sprintf("  %d/%d", b.cursor+1, len(b.entries))) + "\n")
 	}
 	return sb.String()
+}
+
+// clip keeps the head of a name, which is where a file is recognised, and
+// marks what was cut.
+func clip(s string, max int) string {
+	if max <= 1 {
+		return ""
+	}
+	if r := []rune(s); len(r) > max {
+		return string(r[:max-1]) + "…"
+	}
+	return s
 }
 
 // shorten keeps the informative tail of a long path.

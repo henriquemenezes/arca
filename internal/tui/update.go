@@ -120,7 +120,9 @@ func (m *model) keySources(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.browser.Update(msg)
-	return m, nil
+	// Whatever the key did, it may have marked something new; the preview is
+	// what turns that into a count.
+	return m, m.measureSelection()
 }
 
 // rebuildMapping reconciles the browser's selection with the mapping already in
