@@ -109,13 +109,16 @@ func (b *browser) Update(msg tea.KeyMsg) {
 		b.hidden = !b.hidden
 		b.load(b.cwd)
 	case " ":
+		// The cursor stays on the row it just marked. Marking is the one
+		// action here people get wrong, and leaving the row where it is
+		// means a second space takes it back without having to find it
+		// again.
 		if e, ok := b.current(); ok {
 			if b.selected[e.path] {
 				delete(b.selected, e.path)
 			} else {
 				b.selected[e.path] = true
 			}
-			b.move(1)
 		}
 	}
 }

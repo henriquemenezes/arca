@@ -216,7 +216,10 @@ func TestBrowserSelectionAndNavigation(t *testing.T) {
 	if len(b.Selected()) != 1 || filepath.Base(b.Selected()[0]) != "alpha" {
 		t.Errorf("selection = %v", b.Selected())
 	}
-	b.Update(key("up"))
+	// The cursor stays on the row it just marked, so a second space undoes it.
+	if got, _ := b.current(); filepath.Base(got.path) != "alpha" {
+		t.Errorf("space moved the cursor to %q, want it on alpha", got.path)
+	}
 	b.Update(key(" ")) // toggle off
 	if len(b.Selected()) != 0 {
 		t.Errorf("space should toggle, selection = %v", b.Selected())
