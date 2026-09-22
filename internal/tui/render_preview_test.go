@@ -82,6 +82,15 @@ func TestRenderPreview(t *testing.T) {
 			search(t, m, filepath.Join(home, "Work")+string(filepath.Separator))
 			run(m, m.measureSelection())
 		})},
+		{"sources (with excludes, selection panel)", mk(stateSources, func(m *model) {
+			m.browser = newBrowser(home)
+			site := filepath.Join(home, "Work", "site")
+			m.browser.selected[site] = true
+			m.browser.selected[filepath.Join(home, ".ssh")] = true
+			m.addPattern(site, "node_modules")
+			m.addPattern(site, "**/*.log")
+			run(m, m.measureSelection())
+		})},
 		{"sources (excludes)", mk(stateSources, func(m *model) {
 			m.browser = newBrowser(home)
 			m.openSources()

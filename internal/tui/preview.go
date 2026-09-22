@@ -134,7 +134,18 @@ func (m *model) sourcesLayout() (browserWidth, previewWidth int) {
 	return avail - preview - previewGap, preview
 }
 
-// viewSelectionPreview draws the chosen paths and what they add up to.
+// viewSelectionPreview draws the chosen paths, what has been left out of them,
+// and what the two add up to.
+//
+// The exclusions belong here. They are half of what the selection is — a
+// pattern is the difference between the tree and the archive — and until they
+// were listed the only place they appeared was the excludes panel, which is a
+// panel you have to know to open. The footer would say "3 excludes" and no
+// screen would say which three, while the count beside each source had already
+// been reduced by them.
+//
+// The rows come from excludeRows, which is what the excludes panel moves its
+// cursor over, so the two cannot disagree about what belongs under what.
 //
 // The totals are pinned to the bottom of the panel so they stay in one place
 // while the list above them grows, and the list gives up its own rows before
@@ -151,18 +162,25 @@ func (m *model) viewSelectionPreview(width, rows int) string {
 	// The title and the blank line under it, then the two footer lines and the
 	// blank line above them.
 	listRows := maxInt(1, rows-5)
-	shown := len(sel)
+	all := m.excludeRows()
+	shown := len(all)
 	if shown > listRows {
 		shown = maxInt(1, listRows-1)
 	}
 
 	lines := make([]string, 0, rows)
-	for _, p := range sel[:shown] {
-		label, style := m.statLabel(p)
-		lines = append(lines, previewRow(contractHome(p), label, style, width))
+	for _, row := range all[:shown] {
+		if row.pattern != "" {
+			// Drawn exactly as the excludes panel draws a pattern nobody is
+			// pointing at, indent, mark and warning included.
+			lines = append(lines, m.excludeLine(row, false, width))
+			continue
+		}
+		label, style := m.statLabel(row.source)
+		lines = append(lines, previewRow(contractHome(row.source), label, style, width))
 	}
-	if shown < len(sel) {
-		lines = append(lines, stCrumb.Render(fmt.Sprintf("+%d more", len(sel)-shown)))
+	if shown < len(all) {
+		lines = append(lines, stCrumb.Render(fmt.Sprintf("+%d more", len(all)-shown)))
 	}
 	for len(lines) < listRows {
 		lines = append(lines, "")

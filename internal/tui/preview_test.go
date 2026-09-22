@@ -92,6 +92,46 @@ func TestSelectionPreviewTotalsEveryChoice(t *testing.T) {
 	}
 }
 
+// The panel is what the selection amounts to, and a pattern takes things out
+// of it. Only the excludes panel listed them, which is a panel you have to know
+// to open — so the count on this one said three things were left out without
+// ever saying which.
+func TestSelectionPreviewListsWhatIsLeftOut(t *testing.T) {
+	_, source := excludeTree(t)
+	m := chosen(t, source, "node_modules")
+	run(m, press(m, "x"))
+
+	view := m.View()
+	if !strings.Contains(view, "node_modules") {
+		t.Errorf("the preview does not name the excluded path:\n%s", view)
+	}
+	if !strings.Contains(view, "any depth") {
+		t.Errorf("the preview does not warn that the pattern is broad:\n%s", view)
+	}
+	if !strings.Contains(view, "1 exclude") {
+		t.Errorf("the preview stopped counting the excludes:\n%s", view)
+	}
+}
+
+// The two panels are the same list, so they cannot disagree about what belongs
+// under what.
+func TestBothPanelsAgreeOnTheExcludes(t *testing.T) {
+	_, source := excludeTree(t)
+	m := chosen(t, source, "node_modules")
+	run(m, press(m, "x"))
+
+	width, rows := 40, 12
+	selection := m.viewSelectionPreview(width, rows)
+	m.mode = srcExcludes
+	excludes := m.viewExcludes(width, rows)
+
+	for _, want := range []string{"node_modules (any depth)"} {
+		if !strings.Contains(selection, want) || !strings.Contains(excludes, want) {
+			t.Errorf("%q is not in both panels:\n%s\n%s", want, selection, excludes)
+		}
+	}
+}
+
 // A path counted once is not counted again: walking a large tree is the one
 // expensive thing this screen does.
 func TestSelectionPreviewCountsEachPathOnce(t *testing.T) {

@@ -307,6 +307,8 @@ func TestTheSourceScreenFitsEveryModeAndWidth(t *testing.T) {
 		for _, mode := range []sourcesMode{srcBrowse, srcPath, srcExcludes, srcExcludeInput} {
 			m := sourcesModel(t, root, width, 30)
 			m.browser.selected[source] = true
+			// With a pattern, so both panels have their deepest row.
+			m.addPattern(source, "**/node_modules/**/*.min.js")
 			m.mode = mode
 			if mode == srcPath {
 				// The field is only drawn as a field while it holds the
