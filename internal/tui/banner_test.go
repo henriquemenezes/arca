@@ -68,13 +68,17 @@ func menuLines(t *testing.T, withNotice bool, height int) int {
 	m := newModel()
 	m.Update(tea.WindowSizeMsg{Width: 92, Height: height})
 	if withNotice {
-		m.notice = "wrote /home/u/.config/arca/identity.age"
+		m.notice = notice{"wrote /home/u/.config/arca/identity.age", levelOK}
 	}
-	return strings.Count(plain(m.viewMenu()), "\n") + 1
+	// The whole screen, footer and all: what has to fit in the terminal is
+	// what the terminal is shown, not the part of it the menu draws.
+	return strings.Count(plain(m.View()), "\n") + 1
 }
 
 func TestScreenHeaderIsJustTheName(t *testing.T) {
-	got := plain(header("Anything", "crumb"))
+	m := newModel()
+	m.Update(tea.WindowSizeMsg{Width: 92, Height: 40})
+	got := strings.TrimLeft(plain(m.render(chrome{title: "Anything", crumb: "crumb"})), "\n ")
 	if strings.Contains(got, `[~\_/~]`) {
 		t.Errorf("the one-line mark was removed from the header, got:\n%s", got)
 	}
@@ -87,7 +91,7 @@ func menuAt(t *testing.T, width, height int) string {
 	t.Helper()
 	m := newModel()
 	m.Update(tea.WindowSizeMsg{Width: width, Height: height})
-	return m.viewMenu()
+	return m.View()
 }
 
 // plain drops styling so assertions are about layout, not colour.

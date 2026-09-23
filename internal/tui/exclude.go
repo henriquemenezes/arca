@@ -251,7 +251,7 @@ func (m *model) viewExcludes(width, rows int) string {
 	}
 	lines = append(lines, "",
 		stMuted.Render(wrap("Patterns apply to every source sharing a destination.", width)),
-		stKey.Render(total))
+		stEmph.Render(total))
 
 	return stTitle.Render("Excludes") + "\n\n" + strings.Join(lines, "\n")
 }

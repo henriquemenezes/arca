@@ -6,8 +6,6 @@
 package tui
 
 import (
-	"strings"
-
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -27,13 +25,23 @@ var (
 	stOK    = lipgloss.NewStyle().Foreground(colOK)
 	stWarn  = lipgloss.NewStyle().Foreground(colWarn)
 	stErr   = lipgloss.NewStyle().Foreground(colDanger).Bold(true)
-	stKey   = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
 
+	// stEmph and stSelected used to be one style, so on the mapping screen the
+	// cursor and the archive member it pointed at were drawn identically and
+	// neither stood out. Bold accent now means "you are here" and nothing
+	// else; data that merely wants picking out of a muted line is accent
+	// alone.
+	stEmph     = lipgloss.NewStyle().Foreground(colAccent)
 	stSelected = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
-	stDir      = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
-	stMark     = lipgloss.NewStyle().Foreground(colOK).Bold(true)
-	stExclude  = lipgloss.NewStyle().Foreground(colDanger).Bold(true)
-	stHit      = lipgloss.NewStyle().Foreground(colWarn).Bold(true)
+
+	// stPayload is the text the screen exists to hand over: the generated
+	// secret, and the command that opens an archive without arca. It shares
+	// bold accent with the cursor, and never shares a screen with one.
+	stPayload = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
+	stDir     = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
+	stMark    = lipgloss.NewStyle().Foreground(colOK).Bold(true)
+	stExclude = lipgloss.NewStyle().Foreground(colDanger).Bold(true)
+	stHit     = lipgloss.NewStyle().Foreground(colWarn).Bold(true)
 
 	stPanel = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -45,12 +53,6 @@ var (
 			BorderForeground(colWarn).
 			Padding(0, 2)
 )
-
-// header renders the consistent title line every screen starts with.
-func header(title, crumb string) string {
-	line := stTitle.Render("arca") + "  " + stCrumb.Render(crumb)
-	return line + "\n" + lipgloss.NewStyle().Bold(true).Render(title) + "\n\n"
-}
 
 // newMenuList builds the entry screen's list. The screen draws its own header
 // and help line, as every other screen does, so the list contributes only the
@@ -109,32 +111,4 @@ const (
 // Three is the floor — below that the list stops being a list.
 func (m *model) pathListRows() int {
 	return maxInt(3, minInt(pathListRows, m.height-16))
-}
-
-// help renders the key legend, wrapping onto further lines rather than running
-// off the side of the terminal. The source screen is what forces this: it has
-// three modes and the widest of them lists more keys than 80 columns hold.
-func (m *model) help(keys ...string) string {
-	const sep = "  ·  "
-	width := m.width - 4 // the padding View puts around every screen
-	if width < 20 {
-		width = 20
-	}
-
-	var out strings.Builder
-	col := 0
-	for i, k := range keys {
-		switch {
-		case i == 0:
-		case col+len(sep)+lipgloss.Width(k) > width:
-			out.WriteString("\n")
-			col = 0
-		default:
-			out.WriteString(stCrumb.Render(sep))
-			col += len(sep)
-		}
-		out.WriteString(stHelp.Render(k))
-		col += lipgloss.Width(k)
-	}
-	return "\n" + out.String()
 }

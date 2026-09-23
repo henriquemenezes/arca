@@ -23,6 +23,34 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// The overlay is the whole screen while it is up, and any key dismisses
+	// it. Nothing underneath sees the keystroke that closed it.
+	if m.showKeys {
+		m.showKeys = false
+		return m, nil
+	}
+
+	// An error belongs to the keystroke that caused it and to the one that
+	// answers it, and no longer. Clearing it here rather than in each handler
+	// is what stops a complaint about a path from sitting on screen while the
+	// user does something else entirely.
+	m.err = nil
+
+	// The two keys every screen offers. They are handled before the screens
+	// see them so that no screen can forget to offer one, and gated on typing
+	// because in a text field they are characters.
+	if !m.typing() {
+		if kHelp.matches(msg) {
+			m.showKeys = true
+			return m, nil
+		}
+		if kQuit.matches(msg) {
+			return m.quit()
+		}
+	}
+	// Anything else takes back a q that was pressed once.
+	m.confirmQuit = false
+
 	switch m.state {
 	case stateMenu:
 		return m.keyMenu(msg)
@@ -56,11 +84,72 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// typing says a text field has the keyboard, which is what decides whether a
+// bare letter is a command or a character.
+//
+// It used to be decided in pieces: the source screen switched on its mode, and
+// keyText and keyPath swallowed everything they did not recognise. Nothing
+// asked the question in one place, which is how q came to quit from the
+// excludes panel and type a letter one keystroke later in its input.
+func (m *model) typing() bool {
+	switch m.state {
+	case statePassphrase, stateRecipients, stateOutput, stateSaveConfig,
+		stateArchiveKey, stateRestoreTarget:
+		return true
+	case stateMapping:
+		return m.editing
+	case stateSources:
+		return m.mode == srcPath || m.mode == srcFilter || m.mode == srcExcludeInput
+	}
+	return false
+}
+
+// atRisk says this screen holds work that quitting would discard. It asks
+// about the work and not only about the screen: an empty selection and a
+// configuration already on disk are both nothing to lose, and warning about
+// them would teach the habit of pressing q twice, which is how a confirmation
+// stops being one.
+func (m *model) atRisk() bool {
+	switch m.state {
+	case stateSources:
+		return len(m.browser.selected) > 0
+	case stateMapping, stateCrypto:
+		return true
+	case stateReview:
+		return !m.fromDisk
+	}
+	return false
+}
+
+// quitWarning names what the second q would throw away.
+func (m *model) quitWarning() string {
+	what := "This will be lost."
+	switch m.state {
+	case stateSources:
+		what = cli.Count(len(m.browser.selected), "item", "items") + " chosen."
+	case stateMapping:
+		what = cli.Count(len(m.mapping), "source", "sources") + " mapped."
+	case stateReview:
+		what = "This configuration is not saved."
+	}
+	return what + " Press q again to discard it and quit."
+}
+
+// quit is the q key, everywhere. A screen holding work asks first, using the
+// same second-press idiom the save screen uses before replacing a file.
+func (m *model) quit() (tea.Model, tea.Cmd) {
+	if m.confirmQuit || !m.atRisk() {
+		return m, tea.Quit
+	}
+	m.confirmQuit = true
+	return m, nil
+}
+
 // ---------- menu ----------
 
 func (m *model) keyMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "esc":
+	case "esc":
 		return m, tea.Quit
 	case "enter":
 		return m.chooseMenu()
@@ -105,8 +194,9 @@ func (m *model) chooseMenu() (tea.Model, tea.Cmd) {
 // keySources hands the keyboard to whichever of the screen's jobs has it.
 //
 // The dispatch has to come first. The browser answers to bare letters — k, j,
-// g, G, ~, . — and this screen answers to q, so while a field is open every one
-// of those is a character being typed and not a command.
+// g, G, ~, . — and the interface answers to q and ?, so while a field is open
+// every one of those is a character being typed and not a command. That is the
+// question m.typing answers for the keys handled before this one.
 func (m *model) keySources(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case srcPath:
@@ -127,9 +217,7 @@ func (m *model) keyBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.leaveSources()
 		m.pop()
 		return m, nil
-	case "q":
-		return m, tea.Quit
-	case "d":
+	case "p":
 		return m, m.focusPath()
 	case "enter", "ctrl+d":
 		return m.acceptSources()
@@ -151,7 +239,7 @@ func (m *model) keyBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // keyPathBar drives the directory line, which is where this screen opens.
 //
-// The field is a detour, not the screen: d opens it, and it hands the keyboard
+// The field is a detour, not the screen: p opens it, and it hands the keyboard
 // back as soon as it has done its one job. That is why enter returns to the
 // list — arriving somewhere is the whole reason the path was typed — and why
 // esc does too, once there is no half-typed path left to take back first.
@@ -237,7 +325,7 @@ func (m *model) focusPath() tea.Cmd {
 
 // openSources readies the screen. The file list keeps the keyboard: choosing
 // what to back up is what the screen is for, and the directory field is the
-// detour d opens for the times the answer is quicker to type than to walk to.
+// detour p opens for the times the answer is quicker to type than to walk to.
 func (m *model) openSources() tea.Cmd {
 	m.browser.attachPath()
 	m.fitSourceFields()
@@ -308,8 +396,6 @@ func (m *model) keyExcludes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = srcBrowse
 		m.err = nil
 		return m, nil
-	case "q":
-		return m, tea.Quit
 	case "ctrl+d":
 		return m.acceptSources()
 	case "up", "k":
@@ -326,7 +412,7 @@ func (m *model) keyExcludes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = srcExcludeInput
 		m.err = nil
 		return m, m.excInput.Focus()
-	case "d", "x":
+	case "d":
 		if len(rows) == 0 {
 			return m, nil
 		}
@@ -570,8 +656,6 @@ func (m *model) keyMapping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.pop()
-	case "q":
-		return m, tea.Quit
 	case "up", "k":
 		if m.mapIndex > 0 {
 			m.mapIndex--
@@ -619,8 +703,6 @@ func (m *model) keyCrypto(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.pop()
-	case "q":
-		return m, tea.Quit
 	case "up", "k":
 		m.cryptoIndex = (m.cryptoIndex - 1 + len(cryptoItems)) % len(cryptoItems)
 	case "down", "j":
@@ -706,7 +788,8 @@ func (m *model) acceptRecipients() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if len(rcpts) == 1 {
-		m.notice = "Only one recipient. Add a recovery key kept offline, or losing this key loses the archive."
+		m.notice = notice{"Only one recipient. Add a recovery key kept offline, " +
+			"or losing this key loses the archive.", levelWarn}
 	}
 	m.cfg.Encryption.Recipients = rcpts
 	m.backupKey = ring
@@ -788,8 +871,6 @@ func (m *model) keyReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.pop()
-	case "q":
-		return m, tea.Quit
 	case "e":
 		return m, m.editConfig()
 	case "n":
@@ -909,7 +990,7 @@ func (m *model) keySaveConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Used for this run only. Nothing on disk is touched, and fromDisk is
 		// already false, so nothing claims a file backs what is about to run.
 		m.cfgInput.Blur()
-		m.notice = "Not saved — this configuration is used for this run only."
+		m.notice = notice{"Not saved — this configuration is used for this run only.", levelInfo}
 		return m, m.returnToReview()
 
 	case "enter":
@@ -938,22 +1019,23 @@ func (m *model) keySaveConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *model) keyFinished(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "esc", "enter":
+	case "esc", "enter":
 		m.state = stateMenu
 		m.back = nil
 		m.err = nil
-		m.notice = ""
+		m.notice = notice{}
 		m.endRun()
 		return m, nil
 	case "s":
 		if m.state == stateDone && !m.fromDisk {
-			path, err := cli.ResolveConfigPath("")
-			if err != nil {
-				m.fail(err)
-				return m, nil
-			}
-			// This screen has nowhere to ask, so it never replaces anything.
-			if err := m.writeConfig(path, false); err != nil {
+			// saveTarget, because that is the path this screen printed when it
+			// offered the key. Resolving a different one here would make the
+			// offer name one file and the key write another.
+			//
+			// This screen has nowhere to ask, so it never replaces anything;
+			// a target that already exists comes back as an error, which is
+			// now drawn above the footer rather than below it.
+			if err := m.writeConfig(m.saveTarget(), false); err != nil {
 				m.fail(err)
 			}
 		}
@@ -980,7 +1062,7 @@ func (m *model) writeConfig(path string, replace bool) error {
 	}
 	m.cfgTOML, m.cfgPath, m.fromDisk = body, path, true
 	m.confirmSave = ""
-	m.notice = "Saved " + path + " — next time `arca backup` reuses it."
+	m.notice = notice{"Saved " + path + " — next time `arca backup` reuses it.", levelOK}
 	return nil
 }
 
@@ -991,8 +1073,6 @@ func (m *model) keyPickArchive(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.pop()
 		return m, nil
-	case "q":
-		return m, tea.Quit
 	case "enter":
 		if e, ok := m.browser.current(); ok && !e.isDir {
 			m.archivePath = e.path
@@ -1036,8 +1116,6 @@ func (m *model) keyArchiveInfo(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.pop()
-	case "q":
-		return m, tea.Quit
 	case "enter":
 		if m.intent != intentRestore {
 			return m, nil
@@ -1090,8 +1168,8 @@ func (m *model) generateIdentity() tea.Cmd {
 		m.fail(err)
 		return nil
 	}
-	m.generated = recipient
-	m.notice = "Identity written to " + path + " (mode 0600). The line below is the public recipient."
+	m.generated, m.genKind = recipient, genIdentity
+	m.notice = notice{"Identity written to " + path + " (mode 0600). The line above is the public recipient.", levelOK}
 	m.push(stateGenerated)
 	return nil
 }
@@ -1102,9 +1180,9 @@ func (m *model) generatePassphrase() tea.Cmd {
 		m.fail(err)
 		return nil
 	}
-	m.generated = p
-	m.notice = fmt.Sprintf("%d words from a list of %d — about %.0f bits of entropy.",
-		secret.DefaultWords, len(secret.Words()), secret.EntropyBits(secret.DefaultWords))
+	m.generated, m.genKind = p, genPassphrase
+	m.notice = notice{fmt.Sprintf("%d words from a list of %d — about %.0f bits of entropy.",
+		secret.DefaultWords, len(secret.Words()), secret.EntropyBits(secret.DefaultWords)), levelInfo}
 	m.push(stateGenerated)
 	return nil
 }

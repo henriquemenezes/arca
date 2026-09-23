@@ -187,10 +187,34 @@ type model struct {
 	restored    *archive.RestoreResult
 
 	generated string
-	notice    string
-	err       error
-	msgs      chan tea.Msg
+	genKind   genKind
+
+	// notice is what the interface has to say that is not an error, and it
+	// carries its own severity: the same field is set on one screen and drawn
+	// on another, so a warning that arrived as a string came out looking like
+	// whatever the reading screen happened to draw.
+	notice notice
+
+	// confirmQuit is a q that has been pressed once on a screen holding work.
+	// Any other key takes it back.
+	confirmQuit bool
+
+	// showKeys is the ? overlay. It is a flag rather than a state so that it
+	// works from anywhere and closing it lands exactly where it opened.
+	showKeys bool
+
+	err  error
+	msgs chan tea.Msg
 }
+
+// genKind says which generator filled in generated, which is all that tells
+// the screen whether it is showing an age recipient or a passphrase.
+type genKind int
+
+const (
+	genIdentity genKind = iota
+	genPassphrase
+)
 
 type readIntent int
 
@@ -432,49 +456,50 @@ func (m *model) View() string {
 	if m.width == 0 {
 		return "starting…"
 	}
-	var body string
+	return lipgloss.NewStyle().Padding(1, 2).Render(m.render(m.chrome()))
+}
+
+// chrome asks the screen in front of the user what it is. Every one of them
+// answers with the same shape, which is what lets render draw the header, the
+// message and the footer once rather than twenty-one times.
+func (m *model) chrome() chrome {
 	switch m.state {
-	case stateMenu:
-		body = m.viewMenu()
 	case stateSources:
-		body = m.viewSources()
+		return m.viewSources()
 	case stateMapping:
-		body = m.viewMapping()
+		return m.viewMapping()
 	case stateCrypto:
-		body = m.viewCrypto()
+		return m.viewCrypto()
 	case statePassphrase:
-		body = m.viewPassphrase()
+		return m.viewPassphrase()
 	case stateRecipients:
-		body = m.viewRecipients()
+		return m.viewRecipients()
 	case stateOutput:
-		body = m.viewOutput()
+		return m.viewOutput()
 	case stateReview:
-		body = m.viewReview()
+		return m.viewReview()
 	case stateSaveConfig:
-		body = m.viewSaveConfig()
+		return m.viewSaveConfig()
 	case stateRunning:
-		body = m.viewRunning()
+		return m.viewRunning()
 	case stateDone:
-		body = m.viewDone()
+		return m.viewDone()
 	case statePickArchive:
-		body = m.viewPickArchive()
+		return m.viewPickArchive()
 	case stateArchiveKey:
-		body = m.viewArchiveKey()
+		return m.viewArchiveKey()
 	case stateArchiveInfo:
-		body = m.viewArchiveInfo()
+		return m.viewArchiveInfo()
 	case stateRestoreTarget:
-		body = m.viewRestoreTarget()
+		return m.viewRestoreTarget()
 	case stateRestoring:
-		body = m.viewRestoring()
+		return m.viewRestoring()
 	case stateRestoreDone:
-		body = m.viewRestoreDone()
+		return m.viewRestoreDone()
 	case stateGenerated:
-		body = m.viewGenerated()
+		return m.viewGenerated()
 	}
-	if m.err != nil {
-		body += "\n" + stErr.Render("error: ") + wrap(m.err.Error(), m.width-8) + "\n"
-	}
-	return lipgloss.NewStyle().Padding(1, 2).Render(body)
+	return m.viewMenu()
 }
 
 // ---------- small helpers ----------

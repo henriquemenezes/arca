@@ -171,7 +171,7 @@ func openFilter(gen int, dir string) (*filter, tea.Cmd) {
 	// a path — as though the root were already being listed — and typing the
 	// "/" that really does list it then put two of them on the line.
 	ti.Prompt = searchPrompt
-	ti.PromptStyle = stKey
+	ti.PromptStyle = stEmph
 
 	f := &filter{
 		gen:   gen,

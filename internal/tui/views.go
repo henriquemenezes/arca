@@ -16,45 +16,53 @@ func timeNow() time.Time { return time.Now() }
 
 func writeIdentity(path string) (string, error) { return cli.WriteIdentity(path) }
 
+// Every screen answers with a chrome rather than a string. What it fills in is
+// what it knows — a title, a body, the keys it listens to — and everything
+// that has to look the same on all of them is drawn once, in render.
+
 // ---------- menu ----------
 
-func (m *model) viewMenu() string {
-	var head strings.Builder
+func (m *model) viewMenu() chrome {
+	c := chrome{
+		title:   "What would you like to do?",
+		crumb:   "menu",
+		keys:    []binding{kMove},
+		primary: confirm("choose"),
+		// Esc quits from the entry screen, as it always has, and so does q.
+		// Both are named because a key that acts and says nothing is the
+		// defect being removed here — but they are named once, together,
+		// since they do the same thing.
+		back:      binding{keys: []string{"esc"}, shown: "esc / q", verb: "quit"},
+		backQuits: true,
+	}
+
 	switch opts := cli.AutoBannerOpts(""); {
 	case m.height >= minHeightForMark:
-		head.WriteString(cli.Mark(opts) + "\n\n")
+		c.art = cli.Mark(opts)
 	case m.height >= minHeightForArk:
-		head.WriteString(cli.Ark(opts) + "\n\n")
+		c.art = cli.Ark(opts)
 	}
-	head.WriteString(header("What would you like to do?", "menu"))
 
-	var foot strings.Builder
 	switch {
 	case m.fromDisk:
-		foot.WriteString("\n" + stMuted.Render("Using "+m.cfgPath+" — backup will start from its review screen.") + "\n")
+		c.subtitle = []string{"Using " + shorten(m.cfgPath, m.inner()-8) +
+			" — a backup starts from its review."}
 	case m.hasConfig():
-		foot.WriteString("\n" + stMuted.Render("Using the configuration built in this session, which is not saved.") + "\n")
+		c.subtitle = []string{"Using the configuration built in this session, which is not saved."}
 	default:
-		foot.WriteString("\n" + stMuted.Render("No arca.toml found; you will pick what to back up.") + "\n")
+		c.subtitle = []string{"No arca.toml found; you will pick what to back up."}
 	}
-	if m.notice != "" {
-		foot.WriteString(stOK.Render("✓ "+m.notice) + "\n")
-	}
-	foot.WriteString(m.help("↑↓ move", "enter choose", "q quit"))
 
-	m.fitMenu(head.String(), foot.String())
-	return head.String() + m.menu.View() + foot.String()
+	m.fitMenu(m.bodyRows(c))
+	c.body = m.menu.View()
+	return c
 }
 
 // fitMenu hands the list the rows the rest of the screen leaves it. When they
 // are too few to carry a blurb under every item the blurbs go, the same trade
 // the artwork above makes; when even the bare titles do not fit, the list
 // paginates rather than running off the bottom.
-func (m *model) fitMenu(head, foot string) {
-	// The screen is padded by one row top and bottom; the rest of the budget
-	// is whatever head and foot already spend.
-	rows := m.height - 2 - strings.Count(head, "\n") - strings.Count(foot, "\n")
-
+func (m *model) fitMenu(rows int) {
 	n := len(m.menu.Items())
 	d := menuDelegate(rows >= itemRows(menuDelegate(true), n))
 	m.menu.SetDelegate(d)
@@ -74,24 +82,28 @@ func (m *model) fitMenu(head, foot string) {
 // this screen showed it, the only place the whole of it appeared was the next
 // screen — too late to notice that a home directory had been marked by
 // accident, or that the one thing being looked for is not in it.
-func (m *model) viewSources() string {
-	var b strings.Builder
-	b.WriteString(header("Choose what to back up", "backup › sources"))
+func (m *model) viewSources() chrome {
+	c := chrome{title: "Choose what to back up", crumb: "backup › sources"}
+	m.sourceKeys(&c)
 
 	browserWidth, previewWidth := m.sourcesLayout()
-	rows := maxInt(3, m.browser.height)
+	// The file list gets the rows the chrome leaves it, less the two the
+	// browser spends on its own directory line and the one it spends saying
+	// how far down the list the cursor is.
+	m.browser.height = maxInt(3, m.bodyRows(c)-3)
+	rows := m.browser.height
 
 	// A terminal too narrow for two columns still has to be able to edit the
 	// patterns, so there the panel takes the whole width while it has focus and
 	// the file list stands down.
 	if previewWidth == 0 {
 		if m.editingExcludes() {
-			b.WriteString(m.viewExcludes(browserWidth-2, rows) + "\n")
-			return b.String() + m.sourcesHelp()
+			c.body = m.viewExcludes(browserWidth-2, rows)
+			return c
 		}
-		b.WriteString(strings.TrimRight(m.browser.View(browserWidth, m.excluded), "\n") + "\n")
-		b.WriteString("\n" + stMuted.Render(m.selectionLine()) + "\n")
-		return b.String() + m.sourcesHelp()
+		c.body = strings.TrimRight(m.browser.View(browserWidth, m.excluded), "\n") +
+			"\n\n" + "  " + stMuted.Render(clip(m.selectionLine(), m.inner()-2))
+		return c
 	}
 
 	left := strings.TrimRight(m.browser.View(browserWidth, m.excluded), "\n")
@@ -112,8 +124,46 @@ func (m *model) viewSources() string {
 	right := stPanel.MarginLeft(previewGap).BorderForeground(border).
 		Width(previewWidth - 2).Height(rows).Render(body)
 
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n")
-	return b.String() + m.sourcesHelp()
+	c.body = lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	return c
+}
+
+// sourceKeys fills in the keys for whichever of the screen's jobs has the
+// keyboard. Each mode takes it whole, so naming all of them at once would name
+// keys that do nothing.
+func (m *model) sourceKeys(c *chrome) {
+	switch m.mode {
+	case srcPath:
+		c.subtitle = []string{"Type where to go; the list follows as you type."}
+		c.keys = []binding{kComplete, kPick, kGo}
+		c.primary = confirm("go")
+		c.back = leave("file list")
+
+	case srcFilter:
+		// What to type is on the line above, in the field itself, so the
+		// subtitle would only repeat it.
+		c.keys = []binding{kMove, kComplete, kSelect, kExclude, kClear, kGo}
+		c.primary = confirm("open")
+		c.back = leave("leave search")
+
+	case srcExcludes:
+		c.subtitle = []string{"Patterns are what each chosen path leaves behind."}
+		c.keys = []binding{kMove, kAdd, kRemove, kGo}
+		c.primary = confirm("add")
+		c.back = leave("file list")
+
+	case srcExcludeInput:
+		c.subtitle = []string{"A pattern is relative to the source it belongs to."}
+		c.primary = confirm("add")
+		c.back = leave("cancel")
+
+	default:
+		c.subtitle = []string{"Space marks a file or directory; the panel counts what it holds."}
+		c.keys = []binding{kMove, kSelect, kExclude, kFind, kPath, kExcludes,
+			kOpen, kUp, kHome, kHidden, kPage, kEdge}
+		c.primary = confirm("continue")
+		c.back = kBack
+	}
 }
 
 // editingExcludes says the excludes panel has the keyboard.
@@ -140,35 +190,42 @@ func (m *model) selectionLine() string {
 	return line
 }
 
-// sourcesHelp lists the keys the screen is currently listening for. Each mode
-// takes the keyboard whole, so showing all of them at once would name keys that
-// do nothing.
-func (m *model) sourcesHelp() string {
-	switch m.mode {
-	case srcPath:
-		return m.help("type a directory", "tab complete", "↑↓ candidates", "enter go",
-			"esc file list")
-	case srcFilter:
-		// What to type is on the line above, in the field itself, so the help
-		// is only keys here.
-		return m.help("↑↓ move", "tab complete", "space select", "ctrl+x exclude",
-			"enter open", "ctrl+u clear", "ctrl+d continue", "esc leave search")
-	case srcExcludes:
-		return m.help("↑↓ move", "a add pattern", "d remove", "esc back")
-	case srcExcludeInput:
-		return m.help("enter add", "esc cancel")
+func (m *model) viewMapping() chrome {
+	c := chrome{
+		title:    "Where should each one land inside the archive?",
+		crumb:    "backup › mapping",
+		subtitle: []string{"The destination is a directory in the archive; each source keeps its own name under it."},
+		keys:     []binding{kMove, kRemove, kEditDest},
+		primary:  confirm("continue"),
+		back:     kBack,
 	}
-	return m.help("↑↓ move", "→ open", "← up", "space select", "d directory",
-		"h home", "x exclude", "X excludes", "/ find", ". hidden", "enter continue",
-		"esc back")
-}
+	if m.editing {
+		c.keys = nil
+		c.primary = confirm("accept")
+		c.back = leave("cancel")
+	}
 
-func (m *model) viewMapping() string {
+	// Each entry is two rows, and the field takes three more when it is open.
+	rows := m.bodyRows(c)
+	if m.editing {
+		rows -= 3
+	}
+	// Each entry costs two rows, and a list that does not fit spends up to two
+	// more saying so — one marker at each end. They come out of the budget
+	// rather than being drawn on top of it, which is the difference between
+	// fitting and overflowing by exactly one line.
+	fit := maxInt(1, rows/2)
+	if len(m.mapping) > fit {
+		fit = maxInt(1, (rows-2)/2)
+	}
+	start, end := window(m.mapIndex, len(m.mapping), fit)
+
 	var b strings.Builder
-	b.WriteString(header("Where should each one land inside the archive?", "backup › mapping"))
-	b.WriteString(stMuted.Render("The destination is a directory in the archive; each source keeps its own name under it.") + "\n\n")
-
-	for i, e := range m.mapping {
+	if start > 0 {
+		b.WriteString("  " + stCrumb.Render(fmt.Sprintf("↑ %d more", start)) + "\n")
+	}
+	for i := start; i < end; i++ {
+		e := m.mapping[i]
 		cursor := "  "
 		if i == m.mapIndex {
 			cursor = stSelected.Render("▸ ")
@@ -177,25 +234,69 @@ func (m *model) viewMapping() string {
 		if dest == "" {
 			dest = stCrumb.Render("(archive root)")
 		}
-		b.WriteString(fmt.Sprintf("%s%s\n", cursor, shorten(e.path, m.width-8)))
+		b.WriteString(fmt.Sprintf("%s%s\n", cursor, shorten(e.path, m.inner()-4)))
 		b.WriteString(fmt.Sprintf("      %s %s   %s %s\n",
-			stMuted.Render("into"), dest, stMuted.Render("→"), stKey.Render(e.member())))
+			stMuted.Render("into"), dest, stMuted.Render("→"), stEmph.Render(e.member())))
+	}
+	if end < len(m.mapping) {
+		b.WriteString("  " + stCrumb.Render(fmt.Sprintf("↓ %d more", len(m.mapping)-end)) + "\n")
 	}
 
 	if m.editing {
-		b.WriteString("\n" + stMuted.Render("Destination directory:") + "\n  " + m.destInput.View() + "\n")
-		return b.String() + m.help("enter accept", "esc cancel")
+		b.WriteString("\n" + "  " + stMuted.Render("Destination directory:") + "\n  " +
+			m.destInput.View() + "\n")
 	}
-	return b.String() + m.help("↑↓ move", "e edit destination", "d remove",
-		"enter continue", "esc back")
+	c.body = b.String()
+	return c
 }
 
-func (m *model) viewCrypto() string {
-	var b strings.Builder
-	b.WriteString(header("How should the archive be encrypted?", "backup › encryption"))
-	b.WriteString(stMuted.Render("age does not allow both at once: a passphrase must be the only way in,") + "\n")
-	b.WriteString(stMuted.Render("otherwise the archive would fall back to the strength of that passphrase.") + "\n\n")
+// fitBody keeps as much of a body as the rows allow and says what it dropped.
+//
+// It is the blunt instrument, for the screens that have no cursor to keep in
+// view: they simply stop when the terminal does. What makes it safe is that
+// those screens are ordered by importance, so the part that goes is the part
+// that was least worth the room.
+func fitBody(body string, rows int) string {
+	ls := strings.Split(strings.TrimRight(body, "\n"), "\n")
+	if len(ls) <= rows {
+		return body
+	}
+	keep := maxInt(1, rows-1)
+	return strings.Join(ls[:keep], "\n") + "\n  " +
+		stCrumb.Render(fmt.Sprintf("+%d more", len(ls)-keep)) + "\n"
+}
 
+// window is the slice of a list that fits, kept around the cursor. It is what
+// stops the mapping screen from drawing forty sources and pushing its own
+// footer off the terminal.
+func window(cursor, n, rows int) (start, end int) {
+	if n <= rows {
+		return 0, n
+	}
+	start = cursor - rows/2
+	if start < 0 {
+		start = 0
+	}
+	if start+rows > n {
+		start = n - rows
+	}
+	return start, start + rows
+}
+
+func (m *model) viewCrypto() chrome {
+	c := chrome{
+		title: "How should the archive be encrypted?",
+		crumb: "backup › encryption",
+		subtitle: []string{
+			"age does not allow both at once: a passphrase must be the only way in,",
+			"otherwise the archive would fall back to the strength of that passphrase.",
+		},
+		keys:    []binding{kMove},
+		primary: confirm("choose"),
+		back:    kBack,
+	}
+
+	var b strings.Builder
 	for i, item := range cryptoItems {
 		cursor, title := "  ", item.title
 		if i == m.cryptoIndex {
@@ -206,22 +307,30 @@ func (m *model) viewCrypto() string {
 			b.WriteString("    " + stMuted.Render(item.blurb) + "\n")
 		}
 	}
-	return b.String() + m.help("↑↓ move", "enter choose", "esc back")
+	c.body = b.String()
+	return c
 }
 
-func (m *model) viewPassphrase() string {
-	var b strings.Builder
-	b.WriteString(header("Type a passphrase", "backup › encryption › passphrase"))
+func (m *model) viewPassphrase() chrome {
+	c := chrome{
+		title:   "Type a passphrase",
+		crumb:   "backup › encryption › passphrase",
+		primary: confirm("continue"),
+		back:    kBack,
+	}
 
+	var b strings.Builder
 	if m.passStage == 0 {
+		c.subtitle = []string{"Checked for strength before anything is written."}
 		b.WriteString("  " + m.passInput.View() + "\n\n")
 		b.WriteString(strengthMeter(m.passInput.Value(), 30))
 	} else {
+		c.subtitle = []string{"Type it once more. A typo here is unrecoverable."}
 		b.WriteString("  " + stMuted.Render("passphrase accepted") + "\n\n")
 		b.WriteString("  " + m.confirmPass.View() + "\n")
-		b.WriteString("\n" + stMuted.Render("Type it once more. A typo here is unrecoverable.") + "\n")
 	}
-	return b.String() + m.help("enter continue", "esc back")
+	c.body = b.String()
+	return c
 }
 
 // strengthMeter gives immediate feedback, because a strength check that only
@@ -247,60 +356,75 @@ func strengthMeter(pass string, width int) string {
 	return line + "\n"
 }
 
-func (m *model) viewRecipients() string {
-	var b strings.Builder
-	b.WriteString(header("Encrypt to age recipients", "backup › encryption › recipients"))
-	b.WriteString(stMuted.Render("Any one of these keys can open the archive.") + "\n")
-	b.WriteString(stMuted.Render("List two: the key you use day to day, and a recovery key kept offline.") + "\n\n")
-	b.WriteString("  " + m.rcptInput.View() + "\n")
-	return b.String() + m.help("enter continue", "esc back")
+func (m *model) viewRecipients() chrome {
+	return chrome{
+		title: "Encrypt to age recipients",
+		crumb: "backup › encryption › recipients",
+		subtitle: []string{
+			"Any one of these keys can open the archive.",
+			"List two: the key you use day to day, and a recovery key kept offline.",
+		},
+		body:    "  " + m.rcptInput.View() + "\n",
+		primary: confirm("continue"),
+		back:    kBack,
+	}
 }
 
-func (m *model) viewOutput() string {
+func (m *model) viewOutput() chrome {
+	c := chrome{
+		title:    "Where should the archive be written?",
+		crumb:    "backup › destination",
+		subtitle: []string{"A directory gets a generated name; a file path is used as given."},
+		keys:     []binding{kComplete, kPick},
+		primary:  confirm("continue"),
+		back:     kBack,
+	}
+
 	var b strings.Builder
-	b.WriteString(header("Where should the archive be written?", "backup › destination"))
-	b.WriteString(stMuted.Render("A directory gets a generated name; a file path is used as given.") + "\n\n")
 	b.WriteString("  " + m.outInput.View() + "\n\n")
 	if list := m.outInput.ViewList(m.width, m.pathListRows()); list != "" {
 		b.WriteString(list + "\n")
 	}
 	if m.cfg != nil {
-		b.WriteString(stMuted.Render("  Name: "+m.archiveName()) + "\n")
+		b.WriteString("  " + stMuted.Render("Name: "+m.archiveName()) + "\n")
 	}
-	return b.String() + m.help("tab complete", "↑↓ pick", "enter continue", "esc back")
+	c.body = b.String()
+	return c
 }
 
-func (m *model) viewReview() string {
-	var b strings.Builder
-	b.WriteString(header("Review", "backup › review"))
+func (m *model) viewReview() chrome {
+	c := chrome{
+		title:   "Review",
+		crumb:   "backup › review",
+		keys:    []binding{kEditCfg, kNewCfg},
+		primary: confirm("start"),
+		back:    kBack,
+	}
 
 	// A plan that could not be built is the moment the configuration most needs
 	// changing — a source was renamed, or deleted — so the two ways to change it
 	// have to be reachable from here too.
 	if m.plan == nil {
-		b.WriteString(m.viewConfigSummary())
-		b.WriteString(stMuted.Render("  Nothing planned yet.") + "\n")
-		return b.String() + m.help("e edit this configuration", "n new configuration",
-			"esc back", "q quit")
+		c.primary = binding{}
+		c.body = m.viewConfigSummary() + "  " + stMuted.Render("Nothing planned yet.") + "\n"
+		return c
 	}
 
+	// The sections are in the order they are worth the room, not the order
+	// they were written in. What this screen is for is the decision to press
+	// enter, and that is made on the totals, the pipeline and the warnings;
+	// the mapping only says in detail what the totals already say. So the
+	// mapping is what a short terminal loses, and it goes last.
+	var b strings.Builder
 	b.WriteString(m.viewConfigSummary())
 
-	b.WriteString(stTitle.Render("Mapping") + "\n")
-	for _, s := range m.plan.Sources {
-		b.WriteString(fmt.Sprintf("  %s\n      %s %s  %s\n",
-			shorten(s.Path, m.width-8),
-			stMuted.Render("→"), stKey.Render(s.Member),
-			stMuted.Render(fmt.Sprintf("%s, %s", cli.Count(s.Stats.Files, "file", "files"), humanBytes(s.Stats.Bytes)))))
-	}
-
-	b.WriteString("\n" + stTitle.Render("Totals") + "\n")
-	b.WriteString(fmt.Sprintf("  %s · %s · %s\n",
+	b.WriteString(stTitle.Render("Totals") + "\n")
+	b.WriteString(fmt.Sprintf("  %s · %s · %s\n\n",
 		cli.Count(m.plan.Stats.Files, "file", "files"),
 		cli.Count(m.plan.Stats.Dirs, "directory", "directories"),
 		humanBytes(m.plan.Stats.Bytes)))
 
-	b.WriteString("\n" + stTitle.Render("Pipeline") + "\n")
+	b.WriteString(stTitle.Render("Pipeline") + "\n")
 	enc := "passphrase"
 	if n := len(m.cfg.Encryption.Recipients); n > 0 {
 		enc = cli.Count(n, "recipient", "recipients")
@@ -308,30 +432,59 @@ func (m *model) viewReview() string {
 	b.WriteString(fmt.Sprintf("  tar → %s (%s) → %s, %s\n",
 		m.cfg.Settings.Compressor, m.cfg.Settings.Compression, m.cfg.Settings.Cipher, enc))
 	if m.outPath != "" {
-		b.WriteString("  " + stMuted.Render(shorten(m.outPath, m.width-6)) + "\n")
+		b.WriteString("  " + stMuted.Render(shorten(m.outPath, m.inner()-2)) + "\n")
 	}
 
-	if len(m.plan.Warnings) > 0 {
-		b.WriteString("\n" + stWarn.Render(cli.Count(len(m.plan.Warnings), "warning", "warnings")+":") + "\n")
-		for i, w := range m.plan.Warnings {
-			if i == 5 {
-				b.WriteString(stMuted.Render(fmt.Sprintf("  … and %d more", len(m.plan.Warnings)-5)) + "\n")
-				break
-			}
-			b.WriteString("  " + stWarn.Render("!") + " " + shorten(w, m.width-6) + "\n")
+	if w := m.viewWarnings(m.plan.Warnings); w != "" {
+		b.WriteString(w)
+	}
+
+	b.WriteString("\n" + stTitle.Render("Mapping") + "\n")
+	for _, src := range m.plan.Sources {
+		b.WriteString(fmt.Sprintf("  %s\n      %s %s  %s\n",
+			shorten(src.Path, m.inner()-4),
+			stMuted.Render("→"), stEmph.Render(src.Member),
+			stMuted.Render(fmt.Sprintf("%s, %s",
+				cli.Count(src.Stats.Files, "file", "files"), humanBytes(src.Stats.Bytes)))))
+	}
+
+	c.body = fitBody(b.String(), m.bodyRows(c))
+	return c
+}
+
+// viewWarnings draws at most five, which is enough to know what kind of
+// trouble it is. Both screens that report warnings use it, so neither can go
+// back to listing all of them and pushing its own footer off the terminal.
+func (m *model) viewWarnings(warnings []string) string {
+	if len(warnings) == 0 {
+		return ""
+	}
+	const most = 5
+	var b strings.Builder
+	b.WriteString("\n" + stWarn.Render(cli.Count(len(warnings), "warning", "warnings")+":") + "\n")
+	for i, w := range warnings {
+		if i == most {
+			b.WriteString("  " + stCrumb.Render(fmt.Sprintf("+%d more", len(warnings)-most)) + "\n")
+			break
 		}
+		b.WriteString("  " + stWarn.Render("!") + " " + shorten(w, m.inner()-4) + "\n")
 	}
-	if m.notice != "" {
-		b.WriteString("\n" + stWarn.Render("! "+m.notice) + "\n")
+	return b.String()
+}
+
+// clampList is how many of n items may be drawn in rows of room, keeping one
+// back for the "+N more" marker whenever there is anything to mark.
+func clampList(n, rows int) int {
+	if n <= rows {
+		return n
 	}
-	return b.String() + m.help("enter start the backup", "e edit this configuration",
-		"n new configuration", "esc back", "q quit")
+	return maxInt(1, rows-1)
 }
 
 // viewConfigSummary names the configuration under review and what each of its
 // groups holds. Without it the review shows what would happen but never which
-// file said so, and "edit this configuration" would be an offer to change
-// something the screen never identified.
+// file said so, and "edit config" would be an offer to change something the
+// screen never identified.
 func (m *model) viewConfigSummary() string {
 	if m.cfg == nil {
 		return ""
@@ -339,12 +492,12 @@ func (m *model) viewConfigSummary() string {
 	var b strings.Builder
 	b.WriteString(stTitle.Render("Configuration") + "\n")
 	if m.fromDisk && m.cfgPath != "" {
-		b.WriteString("  " + stKey.Render(shorten(m.cfgPath, m.width-6)) + "\n")
+		b.WriteString("  " + stEmph.Render(shorten(m.cfgPath, m.inner()-2)) + "\n")
 	} else {
 		b.WriteString("  " + stMuted.Render("built in this session, not saved") + "\n")
 	}
 	for _, g := range m.cfg.Groups {
-		line := fmt.Sprintf("  %s %s", stKey.Render(padRight(groupLabel(g.Name), 14)),
+		line := fmt.Sprintf("  %s %s", stEmph.Render(padRight(groupLabel(g.Name), 14)),
 			stMuted.Render(cli.Count(len(g.Sources), "source", "sources")))
 		if n := len(g.Exclude); n > 0 {
 			line += stMuted.Render(" · " + cli.Count(n, "exclude pattern", "exclude patterns"))
@@ -363,9 +516,17 @@ func groupLabel(name string) string {
 	return name
 }
 
-func (m *model) viewSaveConfig() string {
+func (m *model) viewSaveConfig() chrome {
+	c := chrome{
+		title:    "Save this configuration?",
+		crumb:    "backup › configuration",
+		subtitle: []string{"Saving it means the next `arca backup` starts from the review."},
+		keys:     []binding{kComplete, kPick, kSkip},
+		primary:  confirm("save"),
+		back:     kBack,
+	}
+
 	var b strings.Builder
-	b.WriteString(header("Save this configuration?", "backup › configuration"))
 	b.WriteString("  " + m.cfgInput.View() + "\n\n")
 	if list := m.cfgInput.ViewList(m.width, m.pathListRows()); list != "" {
 		b.WriteString(list + "\n")
@@ -375,31 +536,32 @@ func (m *model) viewSaveConfig() string {
 	if err == nil {
 		if _, statErr := os.Stat(path); statErr == nil {
 			if m.confirmSave == path {
-				b.WriteString(stWarn.Render("  Press enter again to replace "+shorten(path, m.width-30)) + "\n")
+				b.WriteString("  " + stWarn.Render("Press enter again to replace "+
+					shorten(path, m.inner()-28)) + "\n")
 			} else {
-				b.WriteString(stWarn.Render("  A configuration is already there; saving replaces it.") + "\n")
+				b.WriteString("  " + stWarn.Render("A configuration is already there; saving replaces it.") + "\n")
 			}
 			// The shipped arca.toml is mostly comments, and they are the one
 			// thing a round trip through this interface cannot carry.
-			b.WriteString(stMuted.Render("  Comments in the existing file are not carried over.") + "\n")
+			b.WriteString("  " + stMuted.Render("Comments in the existing file are not carried over.") + "\n")
 		}
 	}
 
 	b.WriteString("\n" + stTitle.Render("What would be written") + "\n")
-	b.WriteString(m.previewTOML())
-	return b.String() + m.help("tab complete", "↑↓ pick", "enter save",
-		"ctrl+d continue without saving", "esc back")
+	b.WriteString(m.previewTOML(m.bodyRows(c) - lipgloss.Height(b.String())))
+	c.body = b.String()
+	return c
 }
 
 // previewTOML shows as much of the rendered file as the terminal has room for.
 // The point is to make "replaces it" concrete before the second enter, so what
 // matters is the top of the file, not all of it.
-func (m *model) previewTOML() string {
+func (m *model) previewTOML(rows int) string {
 	if m.cfg == nil {
 		return ""
 	}
 	lines := strings.Split(strings.TrimRight(m.renderTOML(m.cfg), "\n"), "\n")
-	rows := maxInt(3, m.height-20)
+	rows = maxInt(3, rows)
 
 	var b strings.Builder
 	for i, line := range lines {
@@ -407,27 +569,43 @@ func (m *model) previewTOML() string {
 			b.WriteString("    " + stCrumb.Render(fmt.Sprintf("+%d more", len(lines)-rows)) + "\n")
 			break
 		}
-		b.WriteString("    " + stMuted.Render(shorten(line, m.width-8)) + "\n")
+		b.WriteString("    " + stMuted.Render(shorten(line, m.inner()-4)) + "\n")
 	}
 	return b.String()
 }
 
-func (m *model) viewRunning() string {
-	var b strings.Builder
-	b.WriteString(header("Writing the archive", "backup › running"))
-
+func (m *model) viewRunning() chrome {
 	var ratio float64
 	if m.plan != nil && m.plan.Stats.Bytes > 0 {
 		ratio = float64(m.lastProg.Bytes) / float64(m.plan.Stats.Bytes)
 	}
-	b.WriteString("  " + m.bar.ViewAs(minFloat(ratio, 1)) + "\n\n")
-	b.WriteString(fmt.Sprintf("  %s of %s · %s\n",
-		humanBytes(m.lastProg.Bytes),
-		humanBytes(planBytes(m)),
-		cli.Count(m.lastProg.Files, "file", "files")))
-	b.WriteString("  " + stMuted.Render(shorten(m.lastProg.Member, m.width-6)) + "\n")
-	b.WriteString("\n  " + stMuted.Render("Encrypted on the way out; nothing is written in the clear.") + "\n")
-	return b.String() + m.help("ctrl+c abort")
+	return chrome{
+		title:    "Writing the archive",
+		crumb:    "backup › running",
+		subtitle: []string{"Encrypted on the way out; nothing is written in the clear."},
+		body:     m.progressBody(ratio, planBytes(m)),
+		busy:     true,
+	}
+}
+
+// progressBody is what a run in flight looks like, and both runs look the
+// same. The restore screen used to be three lines of text beside the backup
+// screen's bar, for no reason other than that they were written apart.
+func (m *model) progressBody(ratio float64, total int64) string {
+	var b strings.Builder
+	if total > 0 {
+		b.WriteString("  " + m.bar.ViewAs(minFloat(ratio, 1)) + "\n\n")
+		b.WriteString(fmt.Sprintf("  %s of %s · %s\n",
+			humanBytes(m.lastProg.Bytes), humanBytes(total),
+			cli.Count(m.lastProg.Files, "file", "files")))
+	} else {
+		// No total to measure against: an archive written before the manifest
+		// recorded one. Saying how far along is better than a bar that lies.
+		b.WriteString(fmt.Sprintf("  %s · %s\n",
+			cli.Count(m.lastProg.Files, "file", "files"), humanBytes(m.lastProg.Bytes)))
+	}
+	b.WriteString("  " + stMuted.Render(shorten(m.lastProg.Member, m.inner()-2)) + "\n")
+	return b.String()
 }
 
 func planBytes(m *model) int64 {
@@ -444,72 +622,102 @@ func minFloat(a, b float64) float64 {
 	return b
 }
 
-func (m *model) viewDone() string {
-	var b strings.Builder
-	b.WriteString(header("Backup complete", "backup › done"))
+func (m *model) viewDone() chrome {
+	c := chrome{
+		title:   "Backup complete",
+		crumb:   "backup › done",
+		primary: confirm("menu"),
+	}
 	if m.result == nil {
-		return b.String() + m.help("enter menu")
+		return c
+	}
+	if !m.fromDisk {
+		c.keys = []binding{kSave}
+		c.subtitle = []string{"s saves this selection to " + m.saveTarget() + "."}
 	}
 
-	b.WriteString("  " + stOK.Render(shorten(m.result.Path, m.width-6)) + "\n\n")
-	b.WriteString(fmt.Sprintf("  %s · %s from %s of sources\n\n",
+	var b strings.Builder
+	b.WriteString("  " + stOK.Render(shorten(m.result.Path, m.inner()-2)) + "\n\n")
+	b.WriteString(fmt.Sprintf("  %s · %s from %s of sources\n",
 		cli.Count(m.result.Stats.Files, "file", "files"),
 		humanBytes(m.result.ArchiveBytes), humanBytes(m.result.Stats.Bytes)))
 
 	if len(m.result.Warnings) > 0 {
-		b.WriteString(stWarn.Render(cli.Count(len(m.result.Warnings), "warning", "warnings")+
-			" recorded in the archive summary") + "\n\n")
+		b.WriteString("  " + stWarn.Render(cli.Count(len(m.result.Warnings), "warning", "warnings")+
+			" recorded in the archive summary") + "\n")
 	}
 
-	b.WriteString(stTitle.Render("Restore without arca, on any Unix machine") + "\n")
-	b.WriteString("  " + stKey.Render(cli.ManualRestoreCommand(m.result.Path, m.cfg)) + "\n\n")
+	b.WriteString("\n" + stTitle.Render("Restore without arca, on any Unix machine") + "\n")
+	b.WriteString("  " + stPayload.Render(cli.ManualRestoreCommand(m.result.Path, m.cfg)) + "\n\n")
 
-	notice := cli.SecretNotice
+	text := cli.SecretNotice
 	if m.genPass != "" {
-		notice = "Your passphrase — save it now, it is shown once:\n\n    " + m.genPass + "\n\n" + cli.SecretNotice
+		text = "Your passphrase — save it now, it is shown once:\n\n    " + m.genPass + "\n\n" + cli.SecretNotice
 	}
-	b.WriteString(stNotice.Width(minInt(m.width-8, 84)).Render(notice) + "\n")
+	b.WriteString(stNotice.Width(minInt(m.inner()-4, 84)).Render(text) + "\n")
 
-	if m.notice != "" {
-		b.WriteString(stOK.Render("✓ "+m.notice) + "\n")
-	}
-	if !m.fromDisk {
-		return b.String() + m.help("s save this selection to ~/.arca/arca.toml", "enter menu", "q quit")
-	}
-	return b.String() + m.help("enter menu", "q quit")
+	c.body = b.String()
+	return c
 }
 
 // ---------- reading an archive ----------
 
-func (m *model) viewPickArchive() string {
-	title := "Choose an archive to inspect"
+// readCrumb prefixes the screens that inspect and restore share. They are one
+// set of screens doing one job for two reasons, and a restore that reads
+// "archive › key" halfway through says nothing about where it is going.
+func (m *model) readCrumb(leaf string) string {
 	if m.intent == intentRestore {
-		title = "Choose an archive to restore"
+		return "restore › " + leaf
 	}
-	var b strings.Builder
-	b.WriteString(header(title, "archive › open"))
-	b.WriteString(m.browser.View(m.width-6, nil))
-	return b.String() + m.help("↑↓ move", "→ open", "← up", "enter choose", ". hidden",
-		"h home", "esc back")
+	return "inspect › " + leaf
 }
 
-func (m *model) viewArchiveKey() string {
-	var b strings.Builder
-	b.WriteString(header("Unlock the archive", "archive › key"))
-	b.WriteString("  " + stMuted.Render(shorten(m.archivePath, m.width-6)) + "\n\n")
-	b.WriteString("  " + m.passInput.View() + "\n\n")
-	b.WriteString(stMuted.Render("  A passphrase, or the path to an age identity file.") + "\n")
-	return b.String() + m.help("enter unlock", "esc back")
+func (m *model) viewPickArchive() chrome {
+	c := chrome{
+		title: "Choose an archive to inspect",
+		crumb: m.readCrumb("archive"),
+		keys:  []binding{kMove, kOpen, kUp, kHome, kHidden, kPage, kEdge},
+		// The browser here picks one file, so enter is what chooses it rather
+		// than what moves on.
+		primary: confirm("choose"),
+		back:    kBack,
+	}
+	if m.intent == intentRestore {
+		c.title = "Choose an archive to restore"
+	}
+	m.browser.height = maxInt(3, m.bodyRows(c)-3)
+	c.body = m.browser.View(m.inner()-2, nil)
+	return c
 }
 
-func (m *model) viewArchiveInfo() string {
-	var b strings.Builder
-	b.WriteString(header("Archive contents", "archive › details"))
+func (m *model) viewArchiveKey() chrome {
+	return chrome{
+		title: "Unlock the archive",
+		crumb: m.readCrumb("key"),
+		// The hint sits above the field now, where every other screen's does.
+		subtitle: []string{"A passphrase, or the path to an age identity file."},
+		body: "  " + stMuted.Render(shorten(m.archivePath, m.inner()-2)) + "\n\n" +
+			"  " + m.passInput.View() + "\n",
+		primary: confirm("unlock"),
+		back:    kBack,
+	}
+}
+
+func (m *model) viewArchiveInfo() chrome {
+	c := chrome{
+		title: "Archive contents",
+		crumb: m.readCrumb("contents"),
+		back:  kBack,
+	}
+	if m.intent == intentRestore {
+		c.primary = confirm("restore")
+	}
 	if m.info == nil {
-		return b.String() + m.help("esc back")
+		return c
 	}
 	mf := m.info.Manifest
 
+	var b strings.Builder
 	rows := [][2]string{
 		{"created", mf.CreatedAt.Local().Format("2006-01-02 15:04:05 MST")},
 		{"host", fmt.Sprintf("%s (%s/%s)", mf.Host.Hostname, mf.Host.OS, mf.Host.Arch)},
@@ -527,17 +735,18 @@ func (m *model) viewArchiveInfo() string {
 
 	b.WriteString("\n" + stTitle.Render("Mapping") + "\n")
 	for _, g := range mf.Groups {
-		b.WriteString("  " + stKey.Render(g.Name) + "\n")
-		for _, s := range g.Sources {
+		b.WriteString("  " + stEmph.Render(g.Name) + "\n")
+		for _, src := range g.Sources {
 			b.WriteString(fmt.Sprintf("      %s %s %s\n",
-				shorten(s.Path, m.width-24), stMuted.Render("→"), s.Member))
+				shorten(src.Path, m.inner()-20), stMuted.Render("→"), src.Member))
 		}
 	}
 
-	if m.intent == intentRestore {
-		return b.String() + m.help("enter choose a target and restore", "esc back", "q quit")
-	}
-	return b.String() + m.help("esc back", "q quit")
+	// The header rows say what the archive is, which is the question this
+	// screen exists to answer; the mapping is the part that can run to any
+	// length, and so the part a short terminal gives up.
+	c.body = fitBody(b.String(), m.bodyRows(c))
+	return c
 }
 
 func padRight(s string, n int) string {
@@ -547,52 +756,78 @@ func padRight(s string, n int) string {
 	return s + strings.Repeat(" ", n-len(s))
 }
 
-func (m *model) viewRestoreTarget() string {
-	var b strings.Builder
-	b.WriteString(header("Where should it be restored?", "restore › target"))
-	b.WriteString(stMuted.Render("The archive already holds the mapped layout, so it is recreated under this directory.") + "\n")
-	b.WriteString(stMuted.Render("Nothing outside it is ever written, and existing files are never replaced.") + "\n\n")
-	b.WriteString("  " + m.targetInput.View() + "\n\n")
-	b.WriteString(m.targetInput.ViewList(m.width, m.pathListRows()))
-	return b.String() + m.help("tab complete", "↑↓ pick", "enter restore", "esc back")
-}
-
-func (m *model) viewRestoring() string {
-	var b strings.Builder
-	b.WriteString(header("Restoring", "restore › running"))
-	b.WriteString(fmt.Sprintf("  %s · %s\n",
-		cli.Count(m.lastProg.Files, "file", "files"), humanBytes(m.lastProg.Bytes)))
-	b.WriteString("  " + stMuted.Render(shorten(m.lastProg.Member, m.width-6)) + "\n")
-	return b.String() + m.help("ctrl+c abort")
-}
-
-func (m *model) viewRestoreDone() string {
-	var b strings.Builder
-	b.WriteString(header("Restore complete", "restore › done"))
-	if m.restored == nil {
-		return b.String() + m.help("enter menu")
+func (m *model) viewRestoreTarget() chrome {
+	c := chrome{
+		title: "Where should it be restored?",
+		crumb: "restore › target",
+		subtitle: []string{
+			"The archive already holds the mapped layout, so it is recreated under this directory.",
+			"Nothing outside it is ever written, and existing files are never replaced.",
+		},
+		keys:    []binding{kComplete, kPick},
+		primary: confirm("restore"),
+		back:    kBack,
 	}
-	b.WriteString("  " + stOK.Render(m.restored.Target) + "\n\n")
+	c.body = "  " + m.targetInput.View() + "\n\n" +
+		m.targetInput.ViewList(m.width, m.pathListRows())
+	return c
+}
+
+func (m *model) viewRestoring() chrome {
+	// The manifest records what was planned, so a restore can measure itself
+	// against the same kind of total a backup does.
+	var ratio float64
+	var total int64
+	if m.info != nil && m.info.Manifest.Planned != nil {
+		total = m.info.Manifest.Planned.Bytes
+		if total > 0 {
+			ratio = float64(m.lastProg.Bytes) / float64(total)
+		}
+	}
+	return chrome{
+		title:    "Restoring",
+		crumb:    "restore › running",
+		subtitle: []string{"Nothing outside the target is written, and existing files are kept."},
+		body:     m.progressBody(ratio, total),
+		busy:     true,
+	}
+}
+
+func (m *model) viewRestoreDone() chrome {
+	c := chrome{
+		title:   "Restore complete",
+		crumb:   "restore › done",
+		primary: confirm("menu"),
+	}
+	if m.restored == nil {
+		return c
+	}
+
+	var b strings.Builder
+	b.WriteString("  " + stOK.Render(shorten(m.restored.Target, m.inner()-2)) + "\n\n")
 	b.WriteString(fmt.Sprintf("  %s · %s · %s\n",
 		cli.Count(m.restored.Files, "file", "files"),
 		cli.Count(m.restored.Dirs, "directory", "directories"),
 		humanBytes(m.restored.Bytes)))
-	if len(m.restored.Warnings) > 0 {
-		b.WriteString("\n" + stWarn.Render(cli.Count(len(m.restored.Warnings), "warning", "warnings")+":") + "\n")
-		for _, w := range m.restored.Warnings {
-			b.WriteString("  " + stWarn.Render("!") + " " + shorten(w, m.width-6) + "\n")
-		}
-	}
-	return b.String() + m.help("enter menu", "q quit")
+	b.WriteString(m.viewWarnings(m.restored.Warnings))
+
+	c.body = fitBody(b.String(), m.bodyRows(c))
+	return c
 }
 
-func (m *model) viewGenerated() string {
-	var b strings.Builder
-	b.WriteString(header("Generated", "keys"))
-	b.WriteString("\n    " + stKey.Render(m.generated) + "\n\n")
-	if m.notice != "" {
-		b.WriteString("  " + stMuted.Render(m.notice) + "\n\n")
+func (m *model) viewGenerated() chrome {
+	c := chrome{
+		title:   "Generated",
+		crumb:   "identity",
+		body:    "  " + stPayload.Render(m.generated) + "\n\n",
+		primary: confirm("menu"),
 	}
-	b.WriteString(stNotice.Width(minInt(m.width-8, 84)).Render(cli.SecretNotice) + "\n")
-	return b.String() + m.help("enter menu", "q quit")
+	if m.genKind == genPassphrase {
+		c.title = "Your new passphrase"
+		c.crumb = "passphrase"
+	} else {
+		c.title = "Your new identity"
+	}
+	c.body += stNotice.Width(minInt(m.inner()-4, 84)).Render(cli.SecretNotice) + "\n"
+	return c
 }

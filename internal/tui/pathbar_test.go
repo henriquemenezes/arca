@@ -45,7 +45,7 @@ func TestDOpensTheDirectoryFieldAndEscCloses(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, "alpha"), 0o755)
 	m := pathModel(t, root)
 
-	send(m, "d")
+	send(m, "p")
 	if m.mode != srcPath || !m.browser.path.input.Focused() {
 		t.Fatalf("d did not open the directory field: mode = %v", m.mode)
 	}
@@ -73,7 +73,7 @@ func TestEscTakesBackATypedPathBeforeTheFocus(t *testing.T) {
 	root := t.TempDir()
 	m := pathModel(t, root)
 
-	send(m, "d", "ctrl+u")
+	send(m, "p", "ctrl+u")
 	typed(m, "/et")
 	send(m, "esc")
 	if m.mode != srcPath {
@@ -114,7 +114,7 @@ func TestEnterInTheFieldGoesAndHandsTheKeysBack(t *testing.T) {
 	os.MkdirAll(target, 0o755)
 
 	m := pathModel(t, root)
-	send(m, "d", "ctrl+u")
+	send(m, "p", "ctrl+u")
 	typed(m, target)
 	send(m, "enter")
 
@@ -140,7 +140,7 @@ func TestTypingAPathChangesTheDirectory(t *testing.T) {
 	os.MkdirAll(target, 0o755)
 
 	m := pathModel(t, root)
-	send(m, "d", "ctrl+u")
+	send(m, "p", "ctrl+u")
 	typed(m, target)
 	send(m, "enter")
 
@@ -165,7 +165,7 @@ func TestThePathBarFollowsTheBrowser(t *testing.T) {
 	if m.browser.cwd != filepath.Join(root, "alpha") {
 		t.Fatalf("cwd = %q", m.browser.cwd)
 	}
-	send(m, "d")
+	send(m, "p")
 	if got := m.browser.path.Value(); got != filepath.Join(root, "alpha") {
 		t.Errorf("the path bar says %q, want the directory the arrows opened", got)
 	}
@@ -176,7 +176,7 @@ func TestTheFieldCompletesWithTab(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, "Downloads"), 0o755)
 
 	m := pathModel(t, root)
-	send(m, "d", "ctrl+u")
+	send(m, "p", "ctrl+u")
 	typed(m, filepath.Join(root, "Down"))
 	send(m, "tab")
 
@@ -198,7 +198,7 @@ func TestCompletionStopsAtWhatTheCandidatesShare(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, "Downloads"), 0o755)
 
 	m := pathModel(t, root)
-	send(m, "d", "ctrl+u")
+	send(m, "p", "ctrl+u")
 	typed(m, filepath.Join(root, "D"))
 	send(m, "tab")
 
@@ -215,7 +215,7 @@ func TestTheArrowsInTheFieldAreOnlyTheTextCursor(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, "Downloads"), 0o755)
 
 	m := pathModel(t, root)
-	send(m, "d", "ctrl+u")
+	send(m, "p", "ctrl+u")
 	typed(m, filepath.Join(root, "Down"))
 	before := m.browser.path.Value()
 
@@ -233,7 +233,7 @@ func TestAPathThatNamesNothingSaysSo(t *testing.T) {
 	root := t.TempDir()
 	m := pathModel(t, root)
 
-	send(m, "d", "ctrl+u")
+	send(m, "p", "ctrl+u")
 	typed(m, filepath.Join(root, "nowhere"))
 	send(m, "enter")
 
@@ -254,7 +254,7 @@ func TestTypingAFileLandsOnItInItsDirectory(t *testing.T) {
 	os.WriteFile(file, []byte("x"), 0o644)
 
 	m := pathModel(t, root)
-	send(m, "d", "ctrl+u")
+	send(m, "p", "ctrl+u")
 	typed(m, file)
 	send(m, "enter")
 
@@ -277,7 +277,7 @@ func TestThePathBarExpandsATilde(t *testing.T) {
 		t.Skip("no home directory")
 	}
 	m := pathModel(t, t.TempDir())
-	send(m, "d", "ctrl+u")
+	send(m, "p", "ctrl+u")
 	typed(m, "~")
 	send(m, "enter")
 
@@ -293,7 +293,7 @@ func TestThePathBarIsDrawnWhereTheDirectoryLineWas(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "zebra")
 	os.MkdirAll(root, 0o755)
 	m := pathModel(t, root)
-	send(m, "d")
+	send(m, "p")
 
 	view := m.View()
 	if !strings.Contains(view, "zebra") {

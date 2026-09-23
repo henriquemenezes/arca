@@ -197,7 +197,7 @@ func (m *model) viewSelectionPreview(width, rows int) string {
 		count += " · " + cli.Count(n, "exclude", "excludes")
 	}
 	lines = append(lines, "", stMuted.Render(count),
-		stKey.Render(fmt.Sprintf("%s · %s", cli.Count(files, "file", "files"), humanBytes(bytes))))
+		stEmph.Render(fmt.Sprintf("%s · %s", cli.Count(files, "file", "files"), humanBytes(bytes))))
 
 	return stTitle.Render("Selection") + "\n\n" + strings.Join(lines, "\n")
 }
