@@ -198,3 +198,35 @@ func TestBrowserKeepsToItsColumn(t *testing.T) {
 		}
 	}
 }
+
+// The panel stands in one place. The browser's rows are only as wide as the
+// names in them, so until the column was squared off the panel slid left to
+// sit against the file list — except under the search, whose input field is
+// padded to the column and so held the panel against the right edge. One
+// screen, two positions, decided by whatever happened to be in the directory.
+func TestTheSelectionPanelKeepsTheRightEdgeInEveryMode(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "a"), []byte("x"), 0o644)
+
+	for _, tc := range []struct {
+		name string
+		keys []string
+	}{
+		{"browsing", nil},
+		{"searching", []string{"/"}},
+		{"excludes", []string{" ", "X"}},
+		{"directory field", []string{"p"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := sourcesModel(t, root, 100, 40)
+			send(m, tc.keys...)
+
+			want := m.inner()
+			for i, line := range strings.Split(strings.TrimRight(m.viewSources().body, "\n"), "\n") {
+				if w := lipgloss.Width(line); w != want {
+					t.Fatalf("row %d is %d columns wide, want %d: %q", i, w, want, plain(line))
+				}
+			}
+		})
+	}
+}

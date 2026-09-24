@@ -106,7 +106,9 @@ func (m *model) viewSources() chrome {
 		return c
 	}
 
-	left := strings.TrimRight(m.browser.View(browserWidth, m.excluded), "\n")
+	// Squared off at the column it was given, so the panel starts in the same
+	// place whatever the browser happens to be listing.
+	left := padBlock(strings.TrimRight(m.browser.View(browserWidth, m.excluded), "\n"), browserWidth)
 
 	// The panel spends the same rows the file list does, so the two columns
 	// start and end together however tall the terminal is.
@@ -126,6 +128,22 @@ func (m *model) viewSources() chrome {
 
 	c.body = lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	return c
+}
+
+// padBlock squares a column off at the width it was drawn for.
+//
+// JoinHorizontal measures the block it is handed, not the column that block
+// belongs to, and the browser's rows are only as wide as the names in them. So
+// the panel sat wherever the longest filename left it — while the search, whose
+// input field is padded to the column, held it against the right edge. The
+// panel moving sideways on a keystroke that has nothing to do with it is the
+// defect; padding is what fixes it in place.
+func padBlock(s string, width int) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = padTo(line, width)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // sourceKeys fills in the keys for whichever of the screen's jobs has the
