@@ -570,3 +570,27 @@ func TestVisitErrorAbortsTheWalk(t *testing.T) {
 		t.Errorf("err = %v, want the visitor error to propagate", err)
 	}
 }
+
+// Matches is the matcher the source screen borrows so that the mark it puts on
+// a row and the decision the walk makes about that row are the same decision.
+func TestMatchesAnswersForGlobsAndBareNames(t *testing.T) {
+	for _, c := range []struct {
+		pattern string
+		rel     string
+		base    string
+		want    bool
+	}{
+		{"**/node_modules", "node_modules", "node_modules", true},
+		{"**/node_modules", "app/node_modules", "node_modules", true},
+		{"**/node_modules", "a/b/node_modules", "node_modules", true},
+		{"**/node_modules", "app/src", "src", false},
+		{"node_modules", "a/b/node_modules", "node_modules", true},
+		{"build", "src/build", "build", true},
+		{"src/build", "src/build", "build", true},
+		{"src/build", "lib/build", "build", false},
+	} {
+		if got := walk.Matches([]string{c.pattern}, c.rel, c.base); got != c.want {
+			t.Errorf("Matches(%q, %q, %q) = %v, want %v", c.pattern, c.rel, c.base, got, c.want)
+		}
+	}
+}

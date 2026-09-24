@@ -8,6 +8,7 @@ import (
 
 	"github.com/hamsa/arca/internal/cli"
 	"github.com/hamsa/arca/internal/config"
+	"github.com/hamsa/arca/internal/walk"
 )
 
 // Exclude patterns on the source screen.
@@ -76,22 +77,35 @@ func broadPattern(p string) bool { return !strings.ContainsRune(p, '/') }
 // excluded reports whether p is left out by the source that contains it. It is
 // what puts the mark on a browser row, so it answers for the path itself, not
 // for what a walk would do with its children.
+//
+// The answer comes from package walk's matcher rather than from a comparison
+// of its own. A pattern here can be any glob — the preset menu writes
+// "**/node_modules" — and a literal comparison would leave the mark dark for
+// everything a preset had just excluded, which is the screen misreporting the
+// one thing it exists to show.
 func (m *model) excluded(p string) bool {
+	_, ok := m.coveredBy(p)
+	return ok
+}
+
+// coveredBy names the pattern that leaves p out, which is what lets a refusal
+// say why rather than only that.
+func (m *model) coveredBy(p string) (string, bool) {
 	src, ok := nearestSource(m.browser.selected, p)
 	if !ok {
-		return false
+		return "", false
 	}
 	rel, err := excludePattern(src, p)
 	if err != nil {
-		return false
+		return "", false
 	}
 	base := filepath.Base(p)
 	for _, pattern := range m.srcExclude[src] {
-		if pattern == rel || (broadPattern(pattern) && pattern == base) {
-			return true
+		if walk.Matches([]string{pattern}, rel, base) {
+			return pattern, true
 		}
 	}
-	return false
+	return "", false
 }
 
 // toggleExclude is the x key: leave out the highlighted path, or take it back
@@ -112,6 +126,15 @@ func (m *model) toggleExclude(p string) error {
 	}
 
 	base := filepath.Base(p)
+	// x undoes only what x could have made, so a glob is not removed here:
+	// dropping "**/node_modules" because the cursor sits on one of them would
+	// take every other one with it. Adding a second pattern for a path already
+	// covered is no better, so it says which pattern covers it and where that
+	// one is removed.
+	if have, ok := m.coveredBy(p); ok && have != pattern && !(broadPattern(have) && have == base) {
+		return fmt.Errorf("%s is already left out by %s: remove that pattern in the "+
+			"excludes panel (X)", base, have)
+	}
 	kept := m.srcExclude[src][:0:0]
 	removed := false
 	for _, have := range m.srcExclude[src] {

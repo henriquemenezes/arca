@@ -351,6 +351,17 @@ type matcher struct{ patterns []string }
 
 func newMatcher(patterns []string) matcher { return matcher{patterns: patterns} }
 
+// Matches answers the same question for callers outside the walk, so that a
+// screen marking a row as left out and the walk leaving it out are the same
+// decision rather than two implementations of one rule that drift apart.
+//
+// absPath is the one part the walk has and a screen may not; a pattern is
+// matched against it only as a last resort, so passing rel alone is exact for
+// every pattern relative to a source root.
+func Matches(patterns []string, relPath, base string) bool {
+	return newMatcher(patterns).match("", relPath, base)
+}
+
 func (m matcher) match(absPath, relPath, base string) bool {
 	for _, p := range m.patterns {
 		if p == "" {
@@ -364,6 +375,11 @@ func (m matcher) match(absPath, relPath, base string) bool {
 		}
 		if ok, _ := doublestar.Match(p, filepath.ToSlash(relPath)); ok {
 			return true
+		}
+		// Matches passes no absolute path; an empty one is not a path a
+		// pattern should be allowed to match.
+		if absPath == "" {
+			continue
 		}
 		if ok, _ := doublestar.Match(p, filepath.ToSlash(absPath)); ok {
 			return true

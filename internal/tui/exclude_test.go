@@ -376,3 +376,39 @@ func TestAnExcludedPathNeverReachesTheArchive(t *testing.T) {
 		t.Errorf("the archive holds %d files, want 1", res.Stats.Files)
 	}
 }
+
+// A glob pattern is what the preset menu writes, and until the panel borrowed
+// the walk's matcher the file list stayed dark for everything a preset had
+// just excluded: the screen said one thing and the backup did another.
+func TestExcludedLightsUpForAGlobPattern(t *testing.T) {
+	_, source := excludeTree(t)
+	m := chosen(t, source, "node_modules")
+	m.setExclude(source, []string{"**/node_modules"})
+
+	if !m.excluded(filepath.Join(source, "node_modules")) {
+		t.Error("**/node_modules does not mark node_modules as excluded")
+	}
+	if m.excluded(filepath.Join(source, "src")) {
+		t.Error("**/node_modules marks src as excluded")
+	}
+}
+
+// x on something a glob already covers used to add a second, redundant
+// pattern. It says what is already covering it instead, and where that one is
+// removed, because x only undoes what x could have made.
+func TestExcludeRefusesAPathAGlobAlreadyCovers(t *testing.T) {
+	_, source := excludeTree(t)
+	m := chosen(t, source, "node_modules")
+	m.setExclude(source, []string{"**/node_modules"})
+	send(m, "x")
+
+	if m.err == nil {
+		t.Fatal("x accepted a path that **/node_modules already covers")
+	}
+	if !strings.Contains(m.err.Error(), "**/node_modules") {
+		t.Errorf("the message does not name the pattern: %v", m.err)
+	}
+	if got := m.srcExclude[source]; !reflect.DeepEqual(got, []string{"**/node_modules"}) {
+		t.Errorf("patterns are %v, want the glob alone", got)
+	}
+}
