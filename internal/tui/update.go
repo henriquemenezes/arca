@@ -207,6 +207,8 @@ func (m *model) keySources(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyExcludes(msg)
 	case srcExcludeInput:
 		return m.keyExcludeInput(msg)
+	case srcPreset:
+		return m.keyPresets(msg)
 	}
 	return m.keyBrowse(msg)
 }
@@ -412,6 +414,16 @@ func (m *model) keyExcludes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = srcExcludeInput
 		m.err = nil
 		return m, m.excInput.Focus()
+	case "A":
+		if len(rows) == 0 {
+			m.fail(errors.New("choose a path first: an exclusion is always something left out of one"))
+			return m, nil
+		}
+		m.excIndex = cursor
+		m.preset = newPresetPicker(rows[cursor].source, false)
+		m.mode = srcPreset
+		m.err = nil
+		return m, nil
 	case "d":
 		if len(rows) == 0 {
 			return m, nil
@@ -457,6 +469,64 @@ func (m *model) keyExcludeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.excInput, cmd = m.excInput.Update(msg)
 	return m, cmd
+}
+
+// keyPresets drives the menu of ready-made patterns.
+//
+// It answers to the browser's keys rather than to keys of its own: space
+// marks, the arrows open and close, and enter is the primary action. The one
+// key that is new is tab, and it is the one thing about this panel that is not
+// visible in the list.
+func (m *model) keyPresets(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	rows := m.preset.rows()
+	cursor := m.presetCursor(rows)
+	m.preset.cursor = cursor
+
+	switch msg.String() {
+	case "esc":
+		m.mode = srcExcludes
+		m.err = nil
+		return m, nil
+	case "up", "k":
+		m.preset.cursor = maxInt(0, cursor-1)
+	case "down", "j":
+		m.preset.cursor = minInt(maxInt(0, len(rows)-1), cursor+1)
+	case "g", "home":
+		m.preset.cursor = 0
+	case "G", "end":
+		m.preset.cursor = maxInt(0, len(rows)-1)
+	case "pgup":
+		m.preset.cursor = maxInt(0, cursor-10)
+	case "pgdown":
+		m.preset.cursor = minInt(maxInt(0, len(rows)-1), cursor+10)
+	case "right":
+		m.preset.open[rows[cursor].group] = true
+	case "left":
+		// From inside a group, closing it is what the left arrow means; the
+		// cursor comes back to the group so it does not land on a row that no
+		// longer exists.
+		delete(m.preset.open, rows[cursor].group)
+		for i, r := range m.preset.rows() {
+			if r.group == rows[cursor].group {
+				m.preset.cursor = i
+				break
+			}
+		}
+	case " ":
+		m.preset.toggle(rows[cursor])
+	case "tab":
+		m.preset.allSrc = !m.preset.allSrc
+	case "enter":
+		if m.presetAdditions() == 0 {
+			m.fail(errors.New("nothing picked: space marks a group or one of its patterns"))
+			return m, nil
+		}
+		m.applyPreset()
+		m.mode = srcExcludes
+		m.err = nil
+		return m, m.measureSelection()
+	}
+	return m, nil
 }
 
 // openSearch indexes the subtree below where the browser is standing.

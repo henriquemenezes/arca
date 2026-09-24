@@ -98,7 +98,7 @@ func (m *model) viewSources() chrome {
 	// the file list stands down.
 	if previewWidth == 0 {
 		if m.editingExcludes() {
-			c.body = m.viewExcludes(browserWidth-2, rows)
+			c.body = m.excludesBody(browserWidth-2, rows)
 			return c
 		}
 		c.body = strings.TrimRight(m.browser.View(browserWidth, m.excluded), "\n") +
@@ -118,7 +118,7 @@ func (m *model) viewSources() chrome {
 	body := m.viewSelectionPreview(inner, rows)
 	border := colFaint
 	if m.editingExcludes() {
-		body = m.viewExcludes(inner, rows)
+		body = m.excludesBody(inner, rows)
 		// The border is the only thing that says which column the keys are
 		// going to, and on this screen that changes.
 		border = colAccent
@@ -165,10 +165,20 @@ func (m *model) sourceKeys(c *chrome) {
 		c.back = leave("leave search")
 
 	case srcExcludes:
-		c.subtitle = []string{"Patterns are what each chosen path leaves behind."}
-		c.keys = []binding{kMove, kAdd, kRemove, kGo}
+		// A is named here as well as in the legend: at a hundred columns the
+		// footer has room for three of this panel's keys, and A is the one
+		// nobody guesses.
+		c.subtitle = []string{"Patterns are what each chosen path leaves behind.",
+			"A offers ready-made ones, one group per language."}
+		c.keys = []binding{kMove, kAdd, kRemove, kPresets, kGo}
 		c.primary = confirm("add")
 		c.back = leave("file list")
+
+	case srcPreset:
+		c.subtitle = []string{"Ready-made patterns, one group per language."}
+		c.keys = []binding{kMove, kSelect, kFold, kScope, kEdge}
+		c.primary = confirm("add")
+		c.back = leave("excludes")
 
 	case srcExcludeInput:
 		c.subtitle = []string{"A pattern is relative to the source it belongs to."}
@@ -184,9 +194,19 @@ func (m *model) sourceKeys(c *chrome) {
 	}
 }
 
-// editingExcludes says the excludes panel has the keyboard.
+// editingExcludes says the excludes panel — or the preset menu that opens on
+// top of it — has the keyboard, which is what moves the border and hands the
+// preview column over.
 func (m *model) editingExcludes() bool {
-	return m.mode == srcExcludes || m.mode == srcExcludeInput
+	return m.mode == srcExcludes || m.mode == srcExcludeInput || m.mode == srcPreset
+}
+
+// excludesBody is whichever of the two panels is in front.
+func (m *model) excludesBody(width, rows int) string {
+	if m.mode == srcPreset {
+		return m.viewPresets(width, rows)
+	}
+	return m.viewExcludes(width, rows)
 }
 
 // selectionLine is the one-line form of the preview, for a terminal too narrow

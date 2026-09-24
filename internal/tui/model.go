@@ -68,6 +68,7 @@ const (
 	srcFilter                          // the fuzzy search field has them
 	srcExcludes                        // the excludes panel has them
 	srcExcludeInput                    // typing a pattern into that panel
+	srcPreset                          // choosing from the ready-made patterns
 )
 
 // mapEntry is one chosen source and the directory it lands in inside the
@@ -137,6 +138,9 @@ type model struct {
 	excIndex  int
 	excInput  textinput.Model
 	filterGen int
+
+	// preset is the state of the preset menu while srcPreset has the keyboard.
+	preset presetPicker
 
 	// sizes is what each chosen path holds, as the source screen's preview
 	// reports it; measuring is the ones a background walk has not finished.

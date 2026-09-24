@@ -85,6 +85,17 @@ var (
 	kExcludes = binding{keys: []string{"X"}, shown: "X", verb: "excludes"}
 	kAdd      = binding{keys: []string{"a"}, shown: "a", verb: "add"}
 
+	// A opens the ready-made patterns. It is a capital beside "a" because it
+	// is the same verb in bulk, and it lives only on the excludes panel: from
+	// the file list it is X then A, and the screen that shows the result is
+	// the screen you end on.
+	kPresets = binding{keys: []string{"A"}, shown: "A", verb: "presets"}
+
+	// The preset menu borrows the browser's grammar rather than inventing one:
+	// space marks, and the arrows open and close.
+	kFold  = binding{keys: []string{"right", "left"}, shown: "→←", verb: "open/close"}
+	kScope = binding{keys: []string{"tab"}, shown: "tab", verb: "scope"}
+
 	// d removes, and only removes, on both screens that have anything to
 	// remove.
 	kRemove = binding{keys: []string{"d"}, shown: "d", verb: "remove"}
