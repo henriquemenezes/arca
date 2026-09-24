@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/hamsa/arca/internal/walk"
 )
 
 // ---------- the catalogue ----------
@@ -51,8 +53,8 @@ func TestEveryGenericNameIsMarkedBroad(t *testing.T) {
 	}
 	for _, g := range presetGroups {
 		for _, p := range g.Patterns {
-			if generic[path.Base(p.Glob)] && !p.Broad {
-				t.Errorf("group %q: %q is a generic name and is not marked Broad", g.Name, p.Glob)
+			if generic[path.Base(p.Glob)] && p.Warn != warnGeneric {
+				t.Errorf("group %q: %q is a generic name and is not flagged as one", g.Name, p.Glob)
 			}
 		}
 	}
@@ -469,6 +471,85 @@ func TestTheScopeLineFitsOnOneLine(t *testing.T) {
 		}
 		if !strings.Contains(line, "tab") {
 			t.Errorf("at %d columns the scope line lost tab: %q", width, line)
+		}
+	}
+}
+
+// ---------- coverage ----------
+
+// covered reports the catalogue entry that would leave d out, if any.
+func covered(d string) (string, bool) {
+	base := d
+	if i := strings.LastIndex(d, "/"); i >= 0 {
+		base = d[i+1:]
+	}
+	for _, g := range presetGroups {
+		for _, p := range g.Patterns {
+			if walk.Matches([]string{p.Glob}, d, base) {
+				return p.Glob, true
+			}
+		}
+	}
+	return "", false
+}
+
+func TestTheCatalogueCoversTheCommonHomeDirectories(t *testing.T) {
+	for _, d := range []string{
+		".local", ".npm", ".cache", ".ollama", ".next", ".ruff_cache",
+		".pytest_cache", ".config", ".rustup", ".vscode", "go/pkg",
+		"disk.iso", "setup.exe", ".oh-my-bash",
+	} {
+		if _, ok := covered(d); !ok {
+			t.Errorf("nothing in the catalogue leaves out %q", d)
+		}
+	}
+}
+
+// ---------- warnings ----------
+
+// A directory that holds real data is not the same warning as a directory
+// whose name is generic, and a backup is the wrong place to conflate them:
+// .config is usually the most valuable thing in a home directory.
+func TestTheTreesThatHoldRealDataSaySo(t *testing.T) {
+	want := map[string]bool{"**/.config": true, "**/.local": true}
+	seen := map[string]bool{}
+	for _, g := range presetGroups {
+		for _, p := range g.Patterns {
+			if !want[p.Glob] {
+				continue
+			}
+			seen[p.Glob] = true
+			if p.Warn == "" {
+				t.Errorf("%q carries no warning", p.Glob)
+			}
+			if p.Warn == warnGeneric {
+				t.Errorf("%q is warned about as a generic name, which is not what it is", p.Glob)
+			}
+		}
+	}
+	for g := range want {
+		if !seen[g] {
+			t.Errorf("%q is not in the catalogue", g)
+		}
+	}
+}
+
+// Nothing that holds real data may be picked by a group that also holds
+// throwaway caches: the group toggle picks all of it, so the two must not
+// share one.
+func TestRealDataDoesNotShareAGroupWithCaches(t *testing.T) {
+	for _, g := range presetGroups {
+		keeps, plain := 0, 0
+		for _, p := range g.Patterns {
+			if p.Warn == warnKeeps {
+				keeps++
+			} else {
+				plain++
+			}
+		}
+		if keeps > 0 && plain > 0 {
+			t.Errorf("group %q mixes %d trees holding real data with %d other patterns",
+				g.Name, keeps, plain)
 		}
 	}
 }

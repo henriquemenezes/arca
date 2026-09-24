@@ -20,32 +20,45 @@ import (
 // The catalogue is data in this file rather than a format on disk: changing it
 // is a commit, which is also what reviewing it is.
 
-// presetPattern is one glob, and whether its name is generic enough that a
-// project might legitimately keep source under it.
+// presetPattern is one glob and, when it needs one, the warning the panel puts
+// beside it.
 //
-// Broad changes neither what the pattern matches nor how it is selected —
+// A warning changes neither what the pattern matches nor how it is selected —
 // picking a group picks all of it, because a checkbox that picks most of a
 // group is a lie. It only announces itself when the group is open, the way the
 // panel already says "(any depth)" rather than changing what the matcher does.
 // In a backup, leaving out a directory by mistake is lost data and not saved
 // space, so the ones worth a second look say so.
+//
+// The two warnings are not the same thing. A generic name is a directory a
+// project might keep source under — build, bin, venv — and is usually build
+// output anyway. A tree that holds real data is not build output at all: it is
+// kept out only by someone who knows they are keeping it out.
 type presetPattern struct {
-	Glob  string
-	Broad bool
+	Glob string
+	Warn string
 }
+
+const (
+	warnGeneric = "generic name"
+	warnKeeps   = "holds real data"
+)
 
 type presetGroup struct {
 	Name     string
 	Patterns []presetPattern
 }
 
-// glob and broad build the entries, so the catalogue below reads as the list
-// it is rather than as a wall of struct literals.
+// glob, broad and keeps build the entries, so the catalogue below reads as the
+// list it is rather than as a wall of struct literals.
 func glob(g string) presetPattern  { return presetPattern{Glob: "**/" + g} }
-func broad(g string) presetPattern { return presetPattern{Glob: "**/" + g, Broad: true} }
+func broad(g string) presetPattern { return presetPattern{Glob: "**/" + g, Warn: warnGeneric} }
+func keeps(g string) presetPattern { return presetPattern{Glob: "**/" + g, Warn: warnKeeps} }
 
-// presetGroups is one group per language, then the three that are not a
-// language.
+// presetGroups is one group per language, then the six that are not a
+// language: the tooling and editor leftovers, the caches and frameworks a home
+// directory accumulates, the files that are re-downloaded rather than
+// restored, and the two trees that hold real data and are kept apart for it.
 //
 // Pairs that share a whole toolchain stay together — splitting C from C++, or
 // Swift from Objective-C, would produce two groups with one list and no
@@ -118,12 +131,38 @@ var presetGroups = []presetGroup{
 		glob("Thumbs.db"), glob("desktop.ini"), glob("lost+found"), glob(".Trash"),
 		glob(".Trash-*"),
 	}},
+	// The toolchain directories are named whole rather than one subdirectory
+	// each: .npm, .rustup and go/pkg are re-downloaded in their entirety by
+	// the command that installs them, so naming .npm/_cacache alone left the
+	// rest of a regenerable tree in the backup for no reason.
 	{"User caches", []presetPattern{
-		glob(".cache"), glob(".npm/_cacache"), glob(".yarn/cache"), glob(".cargo/registry"),
-		glob(".cargo/git"), glob(".rustup/toolchains"), glob(".gradle/caches"),
+		glob(".cache"), glob(".npm"), glob(".yarn/cache"), glob(".cargo/registry"),
+		glob(".cargo/git"), glob(".rustup"), glob(".gradle/caches"),
 		glob(".m2/repository"), glob(".ivy2/cache"), glob(".nuget/packages"),
-		glob("go/pkg/mod"), glob(".nvm/versions"), glob(".pyenv/versions"),
-		glob(".local/share/Trash"),
+		glob("go/pkg"), glob(".nvm/versions"), glob(".pyenv/versions"),
+		glob(".local/share/Trash"), glob(".ollama"),
+	}},
+	// Frameworks that were cloned or installed by a script, and come back the
+	// same way.
+	{"Shell frameworks", []presetPattern{
+		glob(".oh-my-bash"), glob(".oh-my-zsh"), glob(".oh-my-posh"), glob(".bash_it"),
+		glob(".antigen"), glob(".zinit"), glob(".zplug"), glob(".fzf"),
+		glob(".sdkman/candidates"),
+	}},
+	// Installers and media, which are re-downloaded rather than restored. Disk
+	// images a virtual machine runs on — .vdi, .qcow2, .vmdk — are deliberately
+	// absent: those are real data wearing a large-file shape.
+	{"Installers · images", []presetPattern{
+		glob("*.iso"), glob("*.img"), glob("*.dmg"), glob("*.exe"), glob("*.msi"),
+		glob("*.deb"), glob("*.rpm"), glob("*.pkg"),
+	}},
+	// Kept apart from everything above, and flagged, because they are not
+	// build output or cache: .config is usually the most valuable thing in a
+	// home directory, and .local carries share/ and bin/. A group toggle picks
+	// all of a group, so these must not sit in one beside things that are
+	// merely large.
+	{"Home dotfile trees", []presetPattern{
+		keeps(".config"), keeps(".local"),
 	}},
 }
 
@@ -410,12 +449,9 @@ func (m *model) presetLine(row presetRow, onCursor bool, width int) string {
 	// Said, not enforced: picking a group picks all of it. In a backup,
 	// leaving out a directory by mistake is lost data, so the names a project
 	// might legitimately keep source under say so where they are read.
-	note := ""
-	switch {
-	case m.presetAlreadyHas(pat.Glob):
+	note := pat.Warn
+	if m.presetAlreadyHas(pat.Glob) {
 		note = "already set"
-	case pat.Broad:
-		note = "generic name"
 	}
 	return presetRowLine(label, note, onCursor, width)
 }
