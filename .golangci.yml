@@ -1,0 +1,58 @@
+# Static analysis for arca. Keep the golangci-lint version in sync between the
+# Makefile (LINT_VER) and .github/workflows/ci.yml.
+version: "2"
+
+linters:
+  # The standard set: errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - errorlint      # %w, errors.Is/As instead of == on wrapped errors
+    - gocritic       # broad diagnostics catch-all
+    - gosec          # weak crypto, unsafe randomness, mode bits
+    - misspell
+    - nilerr         # returning nil after a non-nil error
+    - usestdlibvars
+    - wastedassign
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      # An explicit `_ =` is how this codebase says "this error cannot matter";
+      # leave those alone and only flag calls whose error is dropped silently.
+      check-blank: false
+    gocritic:
+      disabled-checks:
+        - ifElseChain    # if/else over a switch is a judgement call, not a bug
+    gosec:
+      excludes:
+        - G104  # unhandled errors: errcheck already owns this, with fewer false hits
+        - G301  # 0755 output/restore directories are intentional
+        - G306  # 0644 config files, written inside a 0700 directory
+        - G304  # opening a path the user named is what a backup tool does
+        - G305  # tar containment is enforced in internal/archive and tested there
+        - G703  # same, via taint analysis
+
+  exclusions:
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      # Fixtures deliberately contain malformed keys such as `compresion`.
+      - path: _test\.go
+        linters:
+          - misspell
+      # Tests shell out to stock tools and build throwaway files on purpose.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+      # The walker warns and continues on an unreadable entry by design: one
+      # bad directory must not abort a backup. nilerr reads that as a bug.
+      - path: internal/walk/
+        linters:
+          - nilerr
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

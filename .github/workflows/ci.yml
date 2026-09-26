@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A new push to the same ref makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep in sync with LINT_VER in the Makefile.
+  LINT_VERSION: v2.14.0
+
+jobs:
+  # The acceptance criterion of the whole project: an archive restores with
+  # stock age, zstd and tar. That has to run here, not be skipped here.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # go.mod names the minimum version; building with the current patch
+      # release is what keeps standard-library CVEs out of the binary.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Stock zstd and tar
+        run: |
+          command -v zstd >/dev/null || { sudo apt-get update && sudo apt-get install -y zstd; }
+          zstd --version
+          tar --version | head -1
+
+      - name: Stock age binary
+        run: make tools
+
+      - name: Tests, with the race detector
+        run: make test-stock
+
+      - name: The stock-tool restore tests must not have been skipped
+        run: |
+          set -o pipefail
+          ARCA_TEST_AGE="$PWD/.tools/age" \
+            go test ./internal/archive -run Stock -v 2>&1 | tee test.log
+          if grep -q -- '--- SKIP' test.log; then
+            echo "::error::emergency-restore tests skipped; a stock tool is missing"
+            exit 1
+          fi
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      # Config lives in .golangci.yml: the standard linters plus gosec,
+      # errorlint, nilerr and gocritic.
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ env.LINT_VERSION }}
+
+      # `run` does not cover formatting in golangci-lint v2 - formatters are a
+      # separate pass. The action left the binary on PATH.
+      - name: gofmt and goimports
+        run: golangci-lint fmt --diff
+
+  vuln:
+    name: vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      # Reports only CVEs this code actually reaches, so a finding is real work.
+      - name: govulncheck
+        run: make vuln
+
+  # A backup tool has to build for the machine you are restoring onto, which is
+  # not necessarily the one that made the archive.
+  cross:
+    name: cross-compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      - run: make cross
