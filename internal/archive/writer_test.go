@@ -120,7 +120,7 @@ func readBack(t *testing.T, path string) ([]member, []string) {
 	tr := tar.NewReader(dec)
 	for {
 		h, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

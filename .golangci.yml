@@ -52,6 +52,11 @@ linters:
         linters:
           - nilerr
 
+# A gate that hides findings is not a gate: report every one.
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
 formatters:
   enable:
     - gofmt

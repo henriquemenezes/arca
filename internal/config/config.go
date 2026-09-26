@@ -384,7 +384,7 @@ func validAlias(a string) error {
 		return errors.New("must be a single name, not a path")
 	}
 	if a == "." || a == ".." {
-		return errors.New("must not be . or ..")
+		return errors.New(`must not be "." or ".."`)
 	}
 	return nil
 }

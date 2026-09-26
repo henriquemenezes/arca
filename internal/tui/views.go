@@ -272,9 +272,9 @@ func (m *model) viewMapping() chrome {
 		if dest == "" {
 			dest = stCrumb.Render("(archive root)")
 		}
-		b.WriteString(fmt.Sprintf("%s%s\n", cursor, shorten(e.path, m.inner()-4)))
-		b.WriteString(fmt.Sprintf("      %s %s   %s %s\n",
-			stMuted.Render("into"), dest, stMuted.Render("→"), stEmph.Render(e.member())))
+		fmt.Fprintf(&b, "%s%s\n", cursor, shorten(e.path, m.inner()-4))
+		fmt.Fprintf(&b, "      %s %s   %s %s\n",
+			stMuted.Render("into"), dest, stMuted.Render("→"), stEmph.Render(e.member()))
 	}
 	if end < len(m.mapping) {
 		b.WriteString("  " + stCrumb.Render(fmt.Sprintf("↓ %d more", len(m.mapping)-end)) + "\n")
@@ -457,18 +457,18 @@ func (m *model) viewReview() chrome {
 	b.WriteString(m.viewConfigSummary())
 
 	b.WriteString(stTitle.Render("Totals") + "\n")
-	b.WriteString(fmt.Sprintf("  %s · %s · %s\n\n",
+	fmt.Fprintf(&b, "  %s · %s · %s\n\n",
 		cli.Count(m.plan.Stats.Files, "file", "files"),
 		cli.Count(m.plan.Stats.Dirs, "directory", "directories"),
-		humanBytes(m.plan.Stats.Bytes)))
+		humanBytes(m.plan.Stats.Bytes))
 
 	b.WriteString(stTitle.Render("Pipeline") + "\n")
 	enc := "passphrase"
 	if n := len(m.cfg.Encryption.Recipients); n > 0 {
 		enc = cli.Count(n, "recipient", "recipients")
 	}
-	b.WriteString(fmt.Sprintf("  tar → %s (%s) → %s, %s\n",
-		m.cfg.Settings.Compressor, m.cfg.Settings.Compression, m.cfg.Settings.Cipher, enc))
+	fmt.Fprintf(&b, "  tar → %s (%s) → %s, %s\n",
+		m.cfg.Settings.Compressor, m.cfg.Settings.Compression, m.cfg.Settings.Cipher, enc)
 	if m.outPath != "" {
 		b.WriteString("  " + stMuted.Render(shorten(m.outPath, m.inner()-2)) + "\n")
 	}
@@ -479,11 +479,11 @@ func (m *model) viewReview() chrome {
 
 	b.WriteString("\n" + stTitle.Render("Mapping") + "\n")
 	for _, src := range m.plan.Sources {
-		b.WriteString(fmt.Sprintf("  %s\n      %s %s  %s\n",
+		fmt.Fprintf(&b, "  %s\n      %s %s  %s\n",
 			shorten(src.Path, m.inner()-4),
 			stMuted.Render("→"), stEmph.Render(src.Member),
 			stMuted.Render(fmt.Sprintf("%s, %s",
-				cli.Count(src.Stats.Files, "file", "files"), humanBytes(src.Stats.Bytes)))))
+				cli.Count(src.Stats.Files, "file", "files"), humanBytes(src.Stats.Bytes))))
 	}
 
 	c.body = fitBody(b.String(), m.bodyRows(c))
@@ -508,15 +508,6 @@ func (m *model) viewWarnings(warnings []string) string {
 		b.WriteString("  " + stWarn.Render("!") + " " + shorten(w, m.inner()-4) + "\n")
 	}
 	return b.String()
-}
-
-// clampList is how many of n items may be drawn in rows of room, keeping one
-// back for the "+N more" marker whenever there is anything to mark.
-func clampList(n, rows int) int {
-	if n <= rows {
-		return n
-	}
-	return maxInt(1, rows-1)
 }
 
 // viewConfigSummary names the configuration under review and what each of its
@@ -633,14 +624,14 @@ func (m *model) progressBody(ratio float64, total int64) string {
 	var b strings.Builder
 	if total > 0 {
 		b.WriteString("  " + m.bar.ViewAs(minFloat(ratio, 1)) + "\n\n")
-		b.WriteString(fmt.Sprintf("  %s of %s · %s\n",
+		fmt.Fprintf(&b, "  %s of %s · %s\n",
 			humanBytes(m.lastProg.Bytes), humanBytes(total),
-			cli.Count(m.lastProg.Files, "file", "files")))
+			cli.Count(m.lastProg.Files, "file", "files"))
 	} else {
 		// No total to measure against: an archive written before the manifest
 		// recorded one. Saying how far along is better than a bar that lies.
-		b.WriteString(fmt.Sprintf("  %s · %s\n",
-			cli.Count(m.lastProg.Files, "file", "files"), humanBytes(m.lastProg.Bytes)))
+		fmt.Fprintf(&b, "  %s · %s\n",
+			cli.Count(m.lastProg.Files, "file", "files"), humanBytes(m.lastProg.Bytes))
 	}
 	b.WriteString("  " + stMuted.Render(shorten(m.lastProg.Member, m.inner()-2)) + "\n")
 	return b.String()
@@ -676,9 +667,9 @@ func (m *model) viewDone() chrome {
 
 	var b strings.Builder
 	b.WriteString("  " + stOK.Render(shorten(m.result.Path, m.inner()-2)) + "\n\n")
-	b.WriteString(fmt.Sprintf("  %s · %s from %s of sources\n",
+	fmt.Fprintf(&b, "  %s · %s from %s of sources\n",
 		cli.Count(m.result.Stats.Files, "file", "files"),
-		humanBytes(m.result.ArchiveBytes), humanBytes(m.result.Stats.Bytes)))
+		humanBytes(m.result.ArchiveBytes), humanBytes(m.result.Stats.Bytes))
 
 	if len(m.result.Warnings) > 0 {
 		b.WriteString("  " + stWarn.Render(cli.Count(len(m.result.Warnings), "warning", "warnings")+
@@ -768,15 +759,15 @@ func (m *model) viewArchiveInfo() chrome {
 			cli.Count(mf.Planned.Files, "file", "files"), humanBytes(mf.Planned.Bytes))})
 	}
 	for _, r := range rows {
-		b.WriteString(fmt.Sprintf("  %s %s\n", stMuted.Render(padRight(r[0]+":", 12)), r[1]))
+		fmt.Fprintf(&b, "  %s %s\n", stMuted.Render(padRight(r[0]+":", 12)), r[1])
 	}
 
 	b.WriteString("\n" + stTitle.Render("Mapping") + "\n")
 	for _, g := range mf.Groups {
 		b.WriteString("  " + stEmph.Render(g.Name) + "\n")
 		for _, src := range g.Sources {
-			b.WriteString(fmt.Sprintf("      %s %s %s\n",
-				shorten(src.Path, m.inner()-20), stMuted.Render("→"), src.Member))
+			fmt.Fprintf(&b, "      %s %s %s\n",
+				shorten(src.Path, m.inner()-20), stMuted.Render("→"), src.Member)
 		}
 	}
 
@@ -843,10 +834,10 @@ func (m *model) viewRestoreDone() chrome {
 
 	var b strings.Builder
 	b.WriteString("  " + stOK.Render(shorten(m.restored.Target, m.inner()-2)) + "\n\n")
-	b.WriteString(fmt.Sprintf("  %s · %s · %s\n",
+	fmt.Fprintf(&b, "  %s · %s · %s\n",
 		cli.Count(m.restored.Files, "file", "files"),
 		cli.Count(m.restored.Dirs, "directory", "directories"),
-		humanBytes(m.restored.Bytes)))
+		humanBytes(m.restored.Bytes))
 	b.WriteString(m.viewWarnings(m.restored.Warnings))
 
 	c.body = fitBody(b.String(), m.bodyRows(c))

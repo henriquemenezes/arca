@@ -187,7 +187,8 @@ func newRestoreCommand() *cobra.Command {
 	f.BoolVar(&dryRun, "dry-run", false, "report what would happen without writing anything")
 	f.BoolVar(&overwrite, "overwrite", false, "replace files that already exist in the target")
 	f.BoolVar(&preserveOwner, "preserve-owner", false, "restore uid/gid (only has an effect as root)")
-	cmd.MarkFlagRequired("target")
+	// Cannot fail: "target" is declared above.
+	_ = cmd.MarkFlagRequired("target")
 	return cmd
 }
 

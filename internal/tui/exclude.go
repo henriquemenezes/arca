@@ -126,19 +126,22 @@ func (m *model) toggleExclude(p string) error {
 	}
 
 	base := filepath.Base(p)
+	// A pattern like "node_modules" leaves this path out only because of its
+	// base name, so it says nothing about this path in particular.
+	byBaseName := func(have string) bool { return broadPattern(have) && have == base }
 	// x undoes only what x could have made, so a glob is not removed here:
 	// dropping "**/node_modules" because the cursor sits on one of them would
 	// take every other one with it. Adding a second pattern for a path already
 	// covered is no better, so it says which pattern covers it and where that
 	// one is removed.
-	if have, ok := m.coveredBy(p); ok && have != pattern && !(broadPattern(have) && have == base) {
+	if have, ok := m.coveredBy(p); ok && have != pattern && !byBaseName(have) {
 		return fmt.Errorf("%s is already left out by %s: remove that pattern in the "+
 			"excludes panel (X)", base, have)
 	}
 	kept := m.srcExclude[src][:0:0]
 	removed := false
 	for _, have := range m.srcExclude[src] {
-		if have == pattern || (broadPattern(have) && have == base) {
+		if have == pattern || byBaseName(have) {
 			removed = true
 			continue
 		}

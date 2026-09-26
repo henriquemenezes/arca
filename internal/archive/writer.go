@@ -208,10 +208,11 @@ func (w *Writer) header(e walk.Entry) (*tar.Header, error) {
 func CopyExactly(dst io.Writer, src io.Reader, size int64) (copied int64, grew bool, err error) {
 	if size > 0 {
 		copied, err = io.CopyN(dst, src, size)
+		// io.EOF here only means the file was shorter than its header promised.
+		// That is not a failure: the padding below makes up the difference.
 		if err != nil && !errors.Is(err, io.EOF) {
 			return copied, false, err
 		}
-		err = nil
 	}
 
 	if copied < size {
