@@ -2,6 +2,10 @@ module github.com/hamsa/arca
 
 go 1.26.2
 
+// 1.26.6 patched GO-2026-5972 in encoding/asn1, which agessh.ParseIdentity
+// reaches when it reads an ssh identity.
+toolchain go1.26.8
+
 require (
 	filippo.io/age v1.3.2
 	github.com/bmatcuk/doublestar/v4 v4.10.2
