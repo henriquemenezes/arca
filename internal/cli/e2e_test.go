@@ -27,7 +27,6 @@ func newHarness(t *testing.T) *harness {
 	// config — or a private key — into the home of whoever runs the suite.
 	t.Setenv("ARCA_HOME", filepath.Join(dir, "arca"))
 	t.Setenv("HOME", filepath.Join(dir, "home"))
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "xdg"))
 
 	h := &harness{t: t, dir: dir, pass: "gaslight-tremor-unmasked-cufflink-shallot-pesky"}
 	passFile := filepath.Join(dir, "pass.txt")

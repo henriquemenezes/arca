@@ -207,10 +207,8 @@ Config lookup stops at the first hit: `./arca.toml`, then `~/.arca/arca.toml`.
 A config next to you wins, so a directory can carry its own without affecting
 anything else. `-c` points at any file directly.
 
-`$ARCA_HOME` overrides `~/.arca` entirely. Both files are also read — never
-written — from `~/.config/arca/` (`~/Library/Application Support/arca/` on
-macOS), which is where arca kept them before, so nothing put there stays
-unreachable.
+`$ARCA_HOME` overrides `~/.arca` entirely. Those are the only locations arca
+knows: no XDG directory is read or written, on any platform.
 
 ## Encryption
 

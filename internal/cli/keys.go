@@ -42,20 +42,17 @@ func DefaultIdentityPath() string {
 	return filepath.Join(dir, DefaultIdentityName)
 }
 
-// FindIdentity returns the first default identity that exists — the current
-// location, then the one arca used before ~/.arca — or "" when there is none.
-//
-// Writing goes to one place and reading looks in two, deliberately: an upgrade
-// must never turn an archive into something nobody can open.
+// FindIdentity returns the default identity, <UserDir>/identity.age, when it
+// exists, or "" when it does not. ~/.arca is the one place arca keeps a key, so
+// it is the one place this looks.
 func FindIdentity() string {
-	for _, dir := range []string{UserDir(), legacyUserDir()} {
-		if dir == "" {
-			continue
-		}
-		p := filepath.Join(dir, DefaultIdentityName)
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
+	dir := UserDir()
+	if dir == "" {
+		return ""
+	}
+	p := filepath.Join(dir, DefaultIdentityName)
+	if _, err := os.Stat(p); err == nil {
+		return p
 	}
 	return ""
 }

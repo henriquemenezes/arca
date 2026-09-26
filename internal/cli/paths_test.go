@@ -28,7 +28,6 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	os.Setenv(cli.HomeEnv, filepath.Join(sandbox, "arca"))
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(sandbox, "config"))
 	os.Setenv("HOME", filepath.Join(sandbox, "home"))
 
 	code := m.Run()
@@ -156,7 +155,6 @@ func TestFindConfig(t *testing.T) {
 		t.Chdir(empty)
 		t.Setenv(cli.HomeEnv, "")
 		t.Setenv("HOME", empty)
-		t.Setenv("XDG_CONFIG_HOME", empty)
 		got, err := cli.FindConfig("")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -188,7 +186,7 @@ func TestUserDir(t *testing.T) {
 }
 
 // The search order is the whole contract: a config next to you beats the one in
-// ~/.arca, which beats the directory arca used before it had one of its own.
+// ~/.arca, and those two are the only places arca looks.
 func TestFindConfigSearchOrder(t *testing.T) {
 	write := func(t *testing.T, dir string) string {
 		t.Helper()
@@ -202,29 +200,25 @@ func TestFindConfigSearchOrder(t *testing.T) {
 		return p
 	}
 
-	// setup returns the three candidate directories, none of them populated.
-	setup := func(t *testing.T) (cwd, user, legacy string) {
+	// setup returns the two candidate directories, neither of them populated.
+	setup := func(t *testing.T) (cwd, user string) {
 		t.Helper()
 		root := t.TempDir()
 		cwd = filepath.Join(root, "cwd")
 		user = filepath.Join(root, "arca")
-		legacy = filepath.Join(root, "xdg", "arca")
 		if err := os.MkdirAll(cwd, 0o700); err != nil {
 			t.Fatal(err)
 		}
 		t.Chdir(cwd)
-		t.Setenv(cli.HomeEnv, "")
+		t.Setenv(cli.HomeEnv, user)
 		t.Setenv("HOME", filepath.Join(root, "home"))
-		t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg"))
-		return cwd, user, legacy
+		return cwd, user
 	}
 
 	t.Run("the working directory wins", func(t *testing.T) {
-		cwd, user, legacy := setup(t)
+		cwd, user := setup(t)
 		write(t, cwd)
 		write(t, user)
-		write(t, legacy)
-		t.Setenv(cli.HomeEnv, user)
 		got, err := cli.FindConfig("")
 		if err != nil {
 			t.Fatal(err)
@@ -235,10 +229,8 @@ func TestFindConfigSearchOrder(t *testing.T) {
 	})
 
 	t.Run("then the user directory", func(t *testing.T) {
-		_, user, legacy := setup(t)
+		_, user := setup(t)
 		want := write(t, user)
-		write(t, legacy)
-		t.Setenv(cli.HomeEnv, user)
 		got, err := cli.FindConfig("")
 		if err != nil {
 			t.Fatal(err)
@@ -248,66 +240,28 @@ func TestFindConfigSearchOrder(t *testing.T) {
 		}
 	})
 
-	t.Run("then the legacy directory", func(t *testing.T) {
-		_, _, legacy := setup(t)
-		want := write(t, legacy)
-		got, err := cli.FindConfig("")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != want {
-			t.Errorf("got %q, want the legacy %q", got, want)
-		}
-	})
-
-	// ARCA_HOME is an override, not an addition: it has to be enough on its own
-	// for a test or a sandbox to be sure nothing else is being read.
-	t.Run("ARCA_HOME switches the legacy directory off", func(t *testing.T) {
-		_, user, legacy := setup(t)
-		write(t, legacy)
-		t.Setenv(cli.HomeEnv, user)
-		got, err := cli.FindConfig("")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != "" {
-			t.Errorf("got %q, want nothing: ARCA_HOME was set", got)
-		}
-	})
 }
 
-// Losing sight of an identity is not an inconvenience, it is an archive nobody
-// can open. The old location has to stay readable.
-func TestFindIdentityReadsTheLegacyDirectory(t *testing.T) {
+// The identity lives in ~/.arca and is looked for there alone.
+func TestFindIdentity(t *testing.T) {
 	root := t.TempDir()
-	legacy := filepath.Join(root, "xdg", "arca")
-	if err := os.MkdirAll(legacy, 0o700); err != nil {
+	t.Setenv("HOME", filepath.Join(root, "home"))
+	user := filepath.Join(root, "arca")
+	if err := os.MkdirAll(user, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(legacy, cli.DefaultIdentityName)
+	t.Setenv(cli.HomeEnv, user)
+
+	if got := cli.FindIdentity(); got != "" {
+		t.Errorf("got %q, want nothing: no key has been written", got)
+	}
+
+	want := filepath.Join(user, cli.DefaultIdentityName)
 	if err := os.WriteFile(want, []byte("# not a real key\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv(cli.HomeEnv, "")
-	t.Setenv("HOME", filepath.Join(root, "home"))
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg"))
-
 	if got := cli.FindIdentity(); got != want {
 		t.Errorf("got %q, want %q", got, want)
-	}
-
-	// A key in the current location takes precedence over the old one.
-	current := filepath.Join(root, "arca")
-	if err := os.MkdirAll(current, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	newer := filepath.Join(current, cli.DefaultIdentityName)
-	if err := os.WriteFile(newer, []byte("# not a real key\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv(cli.HomeEnv, current)
-	if got := cli.FindIdentity(); got != newer {
-		t.Errorf("got %q, want %q", got, newer)
 	}
 }
 

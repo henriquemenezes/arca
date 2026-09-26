@@ -23,9 +23,10 @@ const (
 
 // UserDir is where arca writes the config and the key: ~/.arca.
 //
-// Deliberately not the XDG location. This is the same path on every Unix, next
-// to the ~/.ssh and ~/.gnupg it exists to protect, and a restore onto a freshly
-// installed machine is one directory to put back.
+// Deliberately not the XDG location, and the only place arca looks. It is the
+// same path on every Unix and on macOS, next to the ~/.ssh and ~/.gnupg it
+// exists to protect, and a restore onto a freshly installed machine is one
+// directory to put back.
 //
 // $ARCA_HOME overrides it, which is also what lets the test suite run without
 // ever going near a real home directory.
@@ -38,23 +39,6 @@ func UserDir() string {
 		return ""
 	}
 	return filepath.Join(home, UserDirName)
-}
-
-// legacyUserDir is where arca used to keep both files: <os.UserConfigDir>/arca.
-//
-// It is still read so that an existing install keeps working. An identity.age
-// stranded there is not an inconvenience — it is a backup nobody can open
-// again. Nothing is ever written to it, and $ARCA_HOME switches it off so that
-// an override is a complete one.
-func legacyUserDir() string {
-	if os.Getenv(HomeEnv) != "" {
-		return ""
-	}
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "arca")
 }
 
 // FindConfig locates the configuration to use. An explicit path must exist; the
@@ -79,13 +63,11 @@ func FindConfig(explicit string) (string, error) {
 }
 
 // configSearchPath lists the candidates in precedence order: the working
-// directory beats the user's own, which beats the directory arca used before.
+// directory beats the user's own.
 func configSearchPath() []string {
 	paths := []string{ConfigFileName}
-	for _, dir := range []string{UserDir(), legacyUserDir()} {
-		if dir != "" {
-			paths = append(paths, filepath.Join(dir, ConfigFileName))
-		}
+	if dir := UserDir(); dir != "" {
+		paths = append(paths, filepath.Join(dir, ConfigFileName))
 	}
 	return paths
 }

@@ -68,7 +68,7 @@ func menuLines(t *testing.T, withNotice bool, height int) int {
 	m := newModel()
 	m.Update(tea.WindowSizeMsg{Width: 92, Height: height})
 	if withNotice {
-		m.notice = notice{"wrote /home/u/.config/arca/identity.age", levelOK}
+		m.notice = notice{"wrote /home/u/.arca/identity.age", levelOK}
 	}
 	// The whole screen, footer and all: what has to fit in the terminal is
 	// what the terminal is shown, not the part of it the menu draws.

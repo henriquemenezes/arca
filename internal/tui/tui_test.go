@@ -26,7 +26,6 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	os.Setenv("ARCA_HOME", filepath.Join(sandbox, "arca"))
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(sandbox, "config"))
 	os.Setenv("HOME", filepath.Join(sandbox, "home"))
 	os.MkdirAll(filepath.Join(sandbox, "home"), 0o755)
 
