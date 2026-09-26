@@ -1,0 +1,64 @@
+name: Bug report
+description: Something arca does that it should not, or does not do that it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not report a security vulnerability here.** Use
+        [private reporting](https://github.com/henriquemenezes/arca/security/advisories/new)
+        instead — see [SECURITY.md](https://github.com/henriquemenezes/arca/blob/main/SECURITY.md).
+
+        **Never paste a passphrase, an identity file or a real archive into an issue.**
+        Redact any path you would rather not publish.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `arca --version`.
+      placeholder: arca v0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: Ubuntu 26.04, amd64 / macOS 15.4, arm64
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: What you ran
+      description: The exact command, and the relevant part of arca.toml if one was used.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Error output, or the wrong result. Paste it as text rather than a screenshot where you can.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Before submitting
+      options:
+        - label: This is not a security vulnerability.
+          required: true
+        - label: I have removed any secret, real archive or private path from this report.
+          required: true

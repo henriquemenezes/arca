@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/henriquemenezes/arca/security/advisories/new
+    about: Private disclosure. Never report a vulnerability in a public issue.
+  - name: Question or idea
+    url: https://github.com/henriquemenezes/arca/discussions
+    about: Ask how something works, or float an idea before writing code.

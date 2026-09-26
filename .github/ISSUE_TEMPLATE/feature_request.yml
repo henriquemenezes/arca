@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a change to what arca does
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Some things are deliberately out of scope: incremental backups,
+        deduplication, a repository format, sidecar files, and anything that
+        would stop `age -d … | zstd -d | tar -x` from restoring an archive.
+        See [CONTRIBUTING.md](https://github.com/henriquemenezes/arca/blob/main/CONTRIBUTING.md).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that arca makes hard or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like it to do
+      description: A command line, a config snippet or a screen sketch helps more than a paragraph.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Existing flags, other tools, a script.
