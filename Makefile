@@ -6,7 +6,14 @@ AGE_VER  := v1.3.2
 LINT_VER := v2.14.0
 VULN_VER := v1.8.0
 
-.PHONY: build install test test-stock check tools lint fmt vuln clean cross
+DIST     := dist
+PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+
+.PHONY: help build install test test-stock check tools lint fmt vuln clean cross dist licenses
+
+## help: list the targets in this file
+help:
+	@sed -n 's/^## //p' $(MAKEFILE_LIST) | awk -F': ' '{printf "  \033[1m%-12s\033[0m %s\n", $$1, $$2}'
 
 ## build: compile the binary (static, no cgo)
 build:
@@ -62,5 +69,22 @@ cross:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o /dev/null ./cmd/arca
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/arca
 
+## dist: build the release tarballs for every supported platform
+dist:
+	@rm -rf $(DIST) && mkdir -p $(DIST)
+	@for p in $(PLATFORMS); do \
+		os=$${p%/*}; arch=$${p#*/}; \
+		echo "  $$os/$$arch"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch \
+			go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/$(BIN) ./cmd/arca || exit 1; \
+		tar -czf $(DIST)/$(BIN)_$(VERSION)_$${os}_$${arch}.tar.gz \
+			-C $(DIST) $(BIN) -C $(CURDIR) LICENSE NOTICE README.md || exit 1; \
+		rm -f $(DIST)/$(BIN); \
+	done
+
+## licenses: regenerate the third-party notice file attached to releases
+licenses:
+	./scripts/third-party-licenses.sh THIRD_PARTY_LICENSES.md
+
 clean:
-	rm -rf $(BIN) $(TOOLS)
+	rm -rf $(BIN) $(TOOLS) $(DIST)
