@@ -10,6 +10,10 @@
   Single-file encrypted backups for Unix. One binary, no runtime dependencies.
 </p>
 
+<p align="center">
+  <a href="https://github.com/henriquemenezes/arca/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/henriquemenezes/arca/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+</p>
+
 ```
 arca backup --source ~/.ssh:dotfiles --source ~/.aws:dotfiles -o ~/backups/
 ```
