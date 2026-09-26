@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/henriquemenezes/arca/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/henriquemenezes/arca/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
 ```
@@ -215,3 +216,7 @@ make test      # unit tests
 make check     # everything, including restoring with the real age/zstd/tar
 make cross     # prove it cross-compiles to linux and darwin, amd64 and arm64
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
