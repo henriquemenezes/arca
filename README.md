@@ -13,6 +13,8 @@
 <p align="center">
   <a href="https://github.com/henriquemenezes/arca/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/henriquemenezes/arca/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Go 1.26+" src="https://img.shields.io/badge/go-1.26%2B-00ADD8.svg">
+  <img alt="Status: beta" src="https://img.shields.io/badge/status-beta-orange.svg">
 </p>
 
 ```
@@ -27,6 +29,40 @@ Or you can just run `arca` and answer what it asks:
 <p align="center">
   <img alt="arca's interactive menu" src="docs/assets/arca-screenshot.png" width="620">
 </p>
+
+> **arca is pre-1.0 and has not been independently audited.** It is provided as
+> is, with no warranty of any kind. Verify every backup you care about
+> (`arca verify`), keep more than one copy, and read the
+> [disclaimer](#disclaimer) before trusting it with data you cannot lose.
+
+## Install
+
+**From a release** — download the archive for your platform from the
+[releases page](https://github.com/henriquemenezes/arca/releases), check it
+against `SHA256SUMS`, and put the binary on your `PATH`:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+tar -xzf arca_<version>_<os>_<arch>.tar.gz
+install -m 0755 arca ~/.local/bin/arca
+```
+
+**With Go** (1.26.2 or newer):
+
+```bash
+go install github.com/henriquemenezes/arca/cmd/arca@latest
+```
+
+**From source:**
+
+```bash
+git clone https://github.com/henriquemenezes/arca
+cd arca
+make build      # ./arca, static, cgo-free
+```
+
+Linux and macOS, amd64 and arm64. There is no Windows build: the tool restores
+Unix ownership and permission bits, which is most of what it is for.
 
 ## Why not restic, borg or kopia
 
@@ -48,7 +84,7 @@ arca is for the other case:
   are inside the encryption. The artifact is one opaque file.
 - **Restoring on a machine with nothing installed.** This is the important one.
 
-## The guarantee
+## No lock-in
 
 The archive is plain `tar` + `zstd` + `age`. If arca has vanished, your backup
 has not:
@@ -57,9 +93,10 @@ has not:
 age -d archive.tar.zst.age | zstd -d | tar -xp -C /destination
 ```
 
-Three tools in every distribution's repositories. This is covered by a test that
-runs the real `age`, `zstd` and `tar` binaries against a real archive — if it
-ever stops passing, the project has lost its reason to exist.
+Three tools in every distribution's repositories. This is a design invariant,
+covered by a test that runs the real `age`, `zstd` and `tar` binaries against a
+real archive on every CI run — if it ever stops passing, the project has lost
+its reason to exist.
 
 ## The mapping
 
@@ -86,10 +123,37 @@ sources = [
 ]
 ```
 
+## Leaving things out
+
+Each group takes `exclude` patterns, which follow gitignore's most useful
+convention:
+
+```toml
+[[group]]
+name    = "projects"
+dest    = "Work"
+sources = ["~/Work"]
+exclude = ["node_modules", "*.iso", "**/target/debug", ".cache/**"]
+```
+
+- A pattern **without** a `/` matches a **basename at any depth**:
+  `node_modules`, `*.iso`, `__pycache__`.
+- A pattern **with** a `/` is matched against the path **relative to the source
+  root**, and then against the absolute path: `**/target/debug`, `.cache/**`.
+
+Globbing is [doublestar](https://github.com/bmatcuk/doublestar), so `*`, `?`,
+`[a-z]`, `{a,b}` and `**` all work. `arca plan` prints what survives the
+patterns before anything is written.
+
+In the interactive interface, `X` opens the excludes panel for the selected
+source and `A` offers ready-made pattern sets per language, so the usual
+twenty or thirty do not have to be typed by hand.
+
 ## Three ways to drive it
 
-All three build the same configuration and take the same code path.
-Precedence: **defaults < `arca.toml` < flags**.
+The TUI, an `arca.toml` and the command-line flags are three front-ends over one
+configuration and one execution path. Precedence:
+**defaults < `arca.toml` < flags**.
 
 ```bash
 arca                    # interactive, when run on a terminal with no arguments
@@ -97,9 +161,6 @@ arca init               # write a commented ~/.arca/arca.toml
 arca init .             # …or one that belongs to this directory
 arca plan               # what would be captured; writes nothing
 arca backup -o ~/backups/
-arca verify  ARCHIVE
-arca list    ARCHIVE
-arca restore ARCHIVE --target ~/restored
 ```
 
 Ad-hoc, with no config file at all:
@@ -107,6 +168,30 @@ Ad-hoc, with no config file at all:
 ```bash
 arca backup --source ~/.ssh:dotfiles --source ~/Downloads -o /media/usb/
 ```
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `arca` / `arca tui` | the interactive interface |
+| `arca init [PATH]` | write a commented config (`--force` to replace one) |
+| `arca gen-key` | create an age identity (`-o` for a path other than `~/.arca/identity.age`) |
+| `arca gen-passphrase` | print a diceware passphrase (`-w` for a word count other than 6) |
+| `arca plan` | resolve the config and walk the sources; writes nothing |
+| `arca backup` | write the archive (`-o` file or directory, `--no-plan` to skip the counting pass) |
+| `arca list ARCHIVE` | manifest and every member (`--short` for the manifest alone) |
+| `arca verify ARCHIVE` | decrypt and authenticate the whole archive |
+| `arca restore ARCHIVE --target DIR` | extract (`--dry-run`, `--overwrite`, `--group`, `--preserve-owner`) |
+
+`plan` and `backup` also take `-c/--config`, `--source PATH[:DEST]`,
+`--level fastest\|default\|better\|best`, `--threads N` (0 = one per CPU),
+`--compressor`, `--cipher`, `-r/--recipient`, `--follow-symlinks` (off by
+default) and `--one-filesystem` (**on** by default, so mount points under a
+source are not descended into).
+
+`list`, `verify` and `restore` take `-i/--identity` (repeatable) and
+`--passphrase-file`. With neither, arca tries `~/.arca/identity.age` if it
+exists and otherwise asks for the passphrase.
 
 ### Where arca keeps things
 
@@ -122,9 +207,10 @@ Config lookup stops at the first hit: `./arca.toml`, then `~/.arca/arca.toml`.
 A config next to you wins, so a directory can carry its own without affecting
 anything else. `-c` points at any file directly.
 
-`$ARCA_HOME` overrides `~/.arca` entirely. Earlier versions kept both files in
-`~/.config/arca/` (`~/Library/Application Support/arca/` on macOS); that path is
-still read, so nothing written by an older arca becomes unreachable.
+`$ARCA_HOME` overrides `~/.arca` entirely. Both files are also read — never
+written — from `~/.config/arca/` (`~/Library/Application Support/arca/` on
+macOS), which is where arca kept them before, so nothing put there stays
+unreachable.
 
 ## Encryption
 
@@ -147,12 +233,28 @@ arca backup -r age1daily... -r age1recovery...
 Use several recipients. One everyday key, one recovery key kept offline, is the
 protection against locking yourself out.
 
+Reading an archive back in key mode means pointing at the identity — your own,
+or the recovery one on another machine:
+
+```bash
+arca verify  archive.tar.zst.age -i ~/.arca/identity.age
+arca restore archive.tar.zst.age -i /media/usb/recovery.age --target ~/restored
+```
+
 A passphrase you invent is refused if it fails a strength check
 (`--allow-weak-passphrase` overrides, loudly). Passphrases are never read from
 the environment: that would expose them in `/proc/<pid>/environ` and to anyone
 who can list processes. Use a terminal or `--passphrase-file` (mode 0600).
 
+**There is no recovery path.** Lose the passphrase or every identity that can
+open an archive, and the data in it is gone — that is what the encryption is
+for. Store the key somewhere other than the archives it protects.
+
 ## What an attacker holding the file learns
+
+This is what the format is designed to give away, and what it is designed to
+keep. It is a description of the design, not a warranty, and not the result of
+an independent audit.
 
 | Observable | Leaks? |
 |---|---|
@@ -216,13 +318,55 @@ Adding gpg, openssl, xz or lz4 means implementing `codec.Compressor` or
 
 ## Development
 
+Go 1.26.2 or newer; nothing else is required to build.
+
 ```
+make help      # list every target
 make build     # static binary
-make test      # unit tests
-make check     # everything, including restoring with the real age/zstd/tar
+make test      # unit tests, with the race detector
+make check     # everything CI runs: lint, govulncheck, tests
 make cross     # prove it cross-compiles to linux and darwin, amd64 and arm64
 ```
 
+`make check` includes the emergency-restore tests, which fetch a stock `age`
+binary into `.tools/` and need `zstd` and `tar` on the `PATH`.
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the workflow and what a pull request
+is expected to carry. To report a vulnerability, follow
+[SECURITY.md](SECURITY.md) — please do not open a public issue for one.
+
+## Disclaimer
+
+arca is free software provided **"as is", without warranty of any kind**,
+express or implied, as set out in the [MIT License](LICENSE). In particular:
+
+- **No guarantee against data loss or corruption.** Neither the authors nor the
+  contributors are liable for any damage, loss of data, loss of profit or other
+  loss arising from using — or being unable to use — this software, however
+  caused.
+- **A backup you have never restored is not a backup.** Verifying archives
+  (`arca verify`), testing an actual restore, and keeping enough copies are your
+  responsibility. Keep 3 copies, on 2 kinds of media, 1 of them off-site.
+- **Encryption is irreversible without the key.** Losing the passphrase or every
+  identity that can open an archive destroys the data inside it permanently. No
+  one, including the authors, can recover it.
+- **Not audited.** The cryptography is age's and is used as documented, but arca
+  itself has had no independent security review.
+- **Cryptography and the law.** arca includes and uses encryption software.
+  Import, export, possession and use of such software are restricted in some
+  jurisdictions; checking the rules that apply to you is your responsibility.
+
+## Credits
+
+arca is glue around other people's good work: [age](https://filippo.io/age) for
+encryption, [klauspost/compress](https://github.com/klauspost/compress) for
+pure-Go zstd, [Charm](https://charm.sh) for bubbletea and lipgloss,
+[cobra](https://github.com/spf13/cobra) for the command line,
+[doublestar](https://github.com/bmatcuk/doublestar) for glob matching, and
+[zxcvbn](https://github.com/trustelem/zxcvbn) for the strength check.
+Passphrases are drawn from the Electronic Frontier Foundation's long wordlist
+(CC BY 3.0 US) — see [NOTICE](NOTICE).
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE), and [NOTICE](NOTICE) for third-party attributions.
