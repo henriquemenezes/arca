@@ -1,0 +1,45 @@
+arca
+Copyright (c) 2026 Henrique Almeida
+
+This product includes software developed by third parties, listed below.
+The arca source code itself is licensed under the MIT License; see LICENSE.
+
+--------------------------------------------------------------------------------
+EFF Long Wordlist
+--------------------------------------------------------------------------------
+
+The file internal/secret/eff_large_wordlist.txt is "EFF's Long Wordlist",
+published by the Electronic Frontier Foundation:
+
+    https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases
+
+Copyright (c) 2016 Electronic Frontier Foundation.
+Licensed under the Creative Commons Attribution 3.0 United States license
+(CC BY 3.0 US): https://creativecommons.org/licenses/by/3.0/us/
+
+The list is embedded verbatim and is used to generate diceware passphrases.
+The EFF does not endorse arca.
+
+--------------------------------------------------------------------------------
+Go modules
+--------------------------------------------------------------------------------
+
+Binaries of arca statically link the Go modules listed in go.mod. They are
+distributed under the MIT, BSD-3-Clause and Apache-2.0 licenses, each of which
+requires that its copyright notice travel with the binary. A complete,
+generated list of those modules and their license texts is attached to every
+GitHub release as THIRD_PARTY_LICENSES.md.
+
+To regenerate it from a checkout:
+
+    make licenses
+
+--------------------------------------------------------------------------------
+Cryptography notice
+--------------------------------------------------------------------------------
+
+arca includes and uses cryptographic software: the age file encryption format
+(X25519, HKDF-SHA-256, ChaCha20-Poly1305, scrypt) as implemented by
+filippo.io/age. The import, export, possession and use of encryption software
+is restricted in some jurisdictions. Before using or redistributing arca, check
+the laws that apply to you; compliance is your responsibility.

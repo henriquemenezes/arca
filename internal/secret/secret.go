@@ -23,6 +23,10 @@ import (
 	"github.com/trustelem/zxcvbn"
 )
 
+// wordlistData is "EFF's Long Wordlist", Copyright (c) 2016 Electronic
+// Frontier Foundation, licensed CC BY 3.0 US. See the NOTICE file at the root
+// of this repository for the full attribution.
+//
 //go:embed eff_large_wordlist.txt
 var wordlistData string
 
