@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -16,7 +17,7 @@ import (
 // the scan has settled.
 func search(t *testing.T, m *model, query string) {
 	t.Helper()
-	m.openSearch()
+	m.Update(key("/"))
 	typed(m, query)
 	drainIndex(t, m)
 }
@@ -675,7 +676,7 @@ func TestTabOnNoMatchesLeavesTheQueryAlone(t *testing.T) {
 // doubled the moment the user typed the "/" that really does list the root.
 func TestTheSearchPromptIsNotMistakenForAPath(t *testing.T) {
 	m := sourcesModel(t, noisyHome(t), 100, 40)
-	m.openSearch()
+	m.Update(key("/"))
 
 	field := func() string {
 		return strings.SplitN(m.browser.View(100, nil), "\n", 2)[0]
@@ -850,5 +851,158 @@ func TestAShallowNameOutranksADeepOneThatSortsEarlier(t *testing.T) {
 	}
 	if want := filepath.Join(home, "Downloads"); rows[0].path != want {
 		t.Errorf("the first match is %q, want %q\nall: %v", rows[0].path, want, rowNames(m))
+	}
+}
+
+// ---------- the archive browser's search ----------
+
+// archiveModel puts the model on the screen both reading flows open on, with
+// the file list holding the keyboard.
+func archiveModel(t *testing.T, root string) *model {
+	t.Helper()
+	m := newModel()
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.intent = intentRestore
+	m.state = statePickArchive
+	m.back = []state{stateMenu}
+	m.browser = newBrowser(root)
+	return m
+}
+
+// archiveTree is where archives really end up: in a directory of their own, a
+// couple of levels from wherever the interface happened to open.
+func archiveTree(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "backups", "2026"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"laptop-2026-01-01.arca", "notes.txt"} {
+		path := filepath.Join(root, "backups", "2026", name)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+// The whole point of the key on this screen: the archive is three directories
+// down, and naming it is quicker than walking to it.
+func TestTheArchiveBrowserFindsAnArchiveSeveralDirectoriesDown(t *testing.T) {
+	root := archiveTree(t)
+	m := archiveModel(t, root)
+	search(t, m, "laptop")
+
+	if names := rowNames(m); !contains(names, "backups/2026/laptop-2026-01-01.arca") {
+		t.Fatalf("the search listed %v", names)
+	}
+
+	m.Update(key("enter"))
+	if m.state != stateArchiveKey {
+		t.Fatalf("state = %v, want the key screen", m.state)
+	}
+	want := filepath.Join(root, "backups", "2026", "laptop-2026-01-01.arca")
+	if m.archivePath != want {
+		t.Errorf("archivePath = %q, want %q", m.archivePath, want)
+	}
+	if m.browser.filter != nil {
+		t.Error("choosing an archive left the scan behind the search running")
+	}
+}
+
+// Enter answers the row it is on. A directory is somewhere to look inside, and
+// looking inside ends the search, whose index is of the tree just left.
+func TestTheArchiveSearchOpensADirectoryAndEndsThere(t *testing.T) {
+	root := archiveTree(t)
+	m := archiveModel(t, root)
+	search(t, m, "2026")
+
+	e, ok := m.browser.current()
+	if !ok || !e.isDir {
+		t.Fatalf("the exact directory name did not rank first: %v", rowNames(m))
+	}
+	m.Update(key("enter"))
+
+	if m.state != statePickArchive {
+		t.Fatalf("state = %v, want the archive browser", m.state)
+	}
+	if m.browser.filter != nil {
+		t.Error("walking into a match left the search open")
+	}
+	if want := filepath.Join(root, "backups", "2026"); m.browser.cwd != want {
+		t.Errorf("cwd = %q, want %q", m.browser.cwd, want)
+	}
+}
+
+// While the field has the keyboard every printable key is a character of the
+// query, including the two the interface answers to everywhere else.
+func TestTheArchiveSearchTakesQAndQuestionMarkAsCharacters(t *testing.T) {
+	m := archiveModel(t, archiveTree(t))
+	m.Update(key("/"))
+	if !m.typing() {
+		t.Fatal("the open search does not claim the keyboard")
+	}
+
+	typed(m, "q?")
+	if got := m.browser.filter.input.Value(); got != "q?" {
+		t.Errorf("the query reads %q; the keys were taken as commands", got)
+	}
+	if m.showKeys {
+		t.Error("typing a question mark opened the keys overlay")
+	}
+}
+
+// Esc undoes the smallest thing it can, which is the search before the screen.
+func TestEscTakesTheArchiveSearchBackBeforeTheScreen(t *testing.T) {
+	m := archiveModel(t, archiveTree(t))
+	m.Update(key("/"))
+
+	m.Update(key("esc"))
+	if m.browser.filter != nil {
+		t.Fatal("esc did not close the search")
+	}
+	if m.state != statePickArchive {
+		t.Fatalf("esc left the screen as well, state = %v", m.state)
+	}
+
+	m.Update(key("esc"))
+	if m.state != stateMenu {
+		t.Errorf("a second esc did not leave the screen, state = %v", m.state)
+	}
+}
+
+// Choosing with no search open must not disturb the list, so esc from the key
+// screen comes back to the file that was named rather than to the top.
+func TestChoosingFromTheListingKeepsTheCursor(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a.arca", "b.arca", "c.arca"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m := archiveModel(t, root)
+
+	m.Update(key("down"))
+	m.Update(key("enter"))
+	if m.state != stateArchiveKey {
+		t.Fatalf("state = %v, want the key screen", m.state)
+	}
+
+	m.Update(key("esc"))
+	e, ok := m.browser.current()
+	if !ok || filepath.Base(e.path) != "b.arca" {
+		t.Errorf("the cursor came back on %q, want b.arca", e.path)
+	}
+}
+
+// The archive browser is the whole width of the screen, not the source
+// screen's left column, and the field has to be sized to the one it is in.
+func TestTheArchiveSearchFieldIsSizedToTheWholeScreen(t *testing.T) {
+	m := archiveModel(t, archiveTree(t))
+	m.Update(key("/"))
+
+	sources, _ := m.sourcesLayout()
+	if got := m.browser.filter.input.Width; got <= sources-2-len(searchPrompt) {
+		t.Errorf("the field is %d wide, no wider than the source screen's column", got)
 	}
 }

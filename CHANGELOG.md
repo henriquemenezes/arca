@@ -11,6 +11,13 @@ with stock `age`, `zstd` and `tar` regardless.
 
 ## [Unreleased]
 
+### Added
+
+- Interactive interface: `/` opens the finder on the screen that chooses an
+  archive to restore or inspect, as it already did on the source screen. A path
+  is completed and a bare name is searched for below the directory on screen,
+  so an archive several directories down is named rather than walked to.
+
 ## [0.1.0] - 2026-09-26
 
 First public release.

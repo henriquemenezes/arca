@@ -100,6 +100,8 @@ func (m *model) typing() bool {
 		return m.editing
 	case stateSources:
 		return m.mode == srcPath || m.mode == srcFilter || m.mode == srcExcludeInput
+	case statePickArchive:
+		return m.browser.filter != nil
 	}
 	return false
 }
@@ -224,6 +226,7 @@ func (m *model) keyBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter", "ctrl+d":
 		return m.acceptSources()
 	case "/":
+		m.mode = srcFilter
 		return m, m.openSearch()
 	case "x", "ctrl+x":
 		return m, m.excludeUnderCursor()
@@ -330,7 +333,7 @@ func (m *model) focusPath() tea.Cmd {
 // detour p opens for the times the answer is quicker to type than to walk to.
 func (m *model) openSources() tea.Cmd {
 	m.browser.attachPath()
-	m.fitSourceFields()
+	m.fitBrowserFields()
 	m.mode = srcBrowse
 	return nil
 }
@@ -529,15 +532,20 @@ func (m *model) keyPresets(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// openSearch indexes the subtree below where the browser is standing.
+// openSearch opens the finder over whatever the browser is listing, indexing
+// the subtree below it.
+//
+// It says nothing about which of a screen's jobs now has the keyboard, because
+// that is not the same question on every screen that offers a search: the
+// source screen has five jobs to hand it between, and the archive browser has
+// only this one and knows it is searching by the filter being there at all.
 func (m *model) openSearch() tea.Cmd {
 	m.browser.filter.close()
 	m.filterGen++
 	f, cmd := openFilter(m.filterGen, m.browser.cwd)
 	m.browser.filter = f
 	m.browser.cursor, m.browser.offset = 0, 0
-	m.fitSourceFields()
-	m.mode = srcFilter
+	m.fitBrowserFields()
 	m.err = nil
 	return tea.Batch(cmd, m.browser.refilter())
 }
@@ -580,7 +588,7 @@ func (m *model) completeSearch() tea.Cmd {
 	return m.browser.refilter()
 }
 
-// fitSourceFields holds the screen's two fields to the column the file list
+// fitBrowserFields holds the browser's two fields to the column the file list
 // occupies.
 //
 // A typed-out path is longer than anything in the list beside it, and a field
@@ -588,15 +596,27 @@ func (m *model) completeSearch() tea.Cmd {
 // panel off the screen. The width has to be set here rather than while drawing:
 // textinput works out which part of a long value is visible when it handles a
 // key, so a width applied at render time is one keystroke late.
-func (m *model) fitSourceFields() {
-	browserWidth, _ := m.sourcesLayout()
+func (m *model) fitBrowserFields() {
+	width := m.browserWidth()
 	if m.browser.filter != nil {
-		m.browser.filter.input.Width = maxInt(8, browserWidth-2-len(searchPrompt))
+		m.browser.filter.input.Width = maxInt(8, width-2-len(searchPrompt))
 	}
 	if m.browser.path != nil {
 		// The prompt textinput draws before the value is two columns wide.
-		m.browser.path.input.Width = maxInt(8, browserWidth-4)
+		m.browser.path.input.Width = maxInt(8, width-4)
 	}
+}
+
+// browserWidth is the column the file list is drawn into. The source screen
+// shares its width with the selection panel; the archive browser is the whole
+// screen, and a field sized for the narrower of the two would sit short of the
+// rows underneath it.
+func (m *model) browserWidth() int {
+	if m.state == stateSources {
+		browserWidth, _ := m.sourcesLayout()
+		return browserWidth
+	}
+	return m.inner() - 2
 }
 
 // excludeUnderCursor is the x key, and works the same on a row the search found
@@ -1138,21 +1158,103 @@ func (m *model) writeConfig(path string, replace bool) error {
 
 // ---------- reading an archive ----------
 
+// keyPickArchive drives the archive browser, which is the screen both reading
+// flows open on.
+//
+// An archive is written wherever there was room for it — a mounted disk, a
+// directory of dated files, somewhere under home — and walking to it one
+// listing at a time is the same chore the source screen already answers with
+// "/". So the same key opens the same finder here, and the same two ways of
+// asking work: a path is completed, and a bare name is searched for below the
+// directory on screen.
+//
+// The one thing that differs is what a row is for. The source screen marks
+// several; this one picks exactly one file, so there is no space key here and
+// enter is what chooses.
 func (m *model) keyPickArchive(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// The filter is the only other thing that can hold this screen's keyboard,
+	// so it needs no mode of its own: being open is the whole of the state.
+	if m.browser.filter != nil {
+		return m.keyArchiveSearch(msg)
+	}
+
 	switch msg.String() {
 	case "esc":
 		m.pop()
 		return m, nil
+	case "/":
+		return m, m.openSearch()
 	case "enter":
 		if e, ok := m.browser.current(); ok && !e.isDir {
-			m.archivePath = e.path
-			m.passInput.SetValue("")
-			m.push(stateArchiveKey)
-			return m, m.passInput.Focus()
+			return m.openArchive(e.path)
 		}
 	}
 	m.browser.Update(msg)
 	return m, nil
+}
+
+// keyArchiveSearch is keyFilter's sibling, and differs only where the two
+// screens do.
+//
+// Nothing here marks or excludes, because this screen has no selection to add
+// to, so every key those cost on the source screen is free to be a character
+// of the query. What is left is the same vocabulary: the arrows move, tab
+// completes the highlighted row into the field, ctrl+u empties it, and esc
+// takes the search back without leaving the screen.
+func (m *model) keyArchiveSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.browser.closeFilter()
+		m.err = nil
+		return m, nil
+	case "tab":
+		return m, m.completeSearch()
+	case "up", "ctrl+p":
+		m.browser.move(-1)
+		return m, nil
+	case "down", "ctrl+n":
+		m.browser.move(1)
+		return m, nil
+	case "pgup":
+		m.browser.move(-m.browser.height)
+		return m, nil
+	case "pgdown":
+		m.browser.move(m.browser.height)
+		return m, nil
+	case "ctrl+u":
+		m.browser.filter.input.SetValue("")
+		return m, m.browser.refilter()
+	case "enter":
+		e, ok := m.browser.current()
+		if !ok {
+			return m, nil
+		}
+		if e.isDir {
+			// Opening a match ends the search: its index is of the tree the
+			// browser is about to leave. That is load's doing, not this line's.
+			m.browser.load(e.path)
+			return m, nil
+		}
+		return m.openArchive(e.path)
+	}
+
+	var cmd tea.Cmd
+	m.browser.filter.input, cmd = m.browser.filter.input.Update(msg)
+	return m, tea.Batch(cmd, m.browser.refilter())
+}
+
+// openArchive moves on to the key screen for the file just chosen.
+//
+// It closes the search first, whether or not one is open. A scan walks a whole
+// tree in the background, and the screen that asked for it is no longer the
+// one in front of the user; coming back with esc should find the browser as it
+// was rather than mid-search over a directory the answer has already left.
+func (m *model) openArchive(path string) (tea.Model, tea.Cmd) {
+	m.browser.closeFilter()
+	m.archivePath = path
+	m.passInput.SetValue("")
+	m.push(stateArchiveKey)
+	return m, m.passInput.Focus()
 }
 
 // acceptArchiveKey opens the archive, trying an identity file when the input

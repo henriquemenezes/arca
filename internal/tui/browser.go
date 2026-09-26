@@ -81,8 +81,13 @@ func (b *browser) refilter() tea.Cmd {
 	return cmd
 }
 
-// closeFilter ends a search, stopping the scan behind it.
+// closeFilter ends a search, stopping the scan behind it. With no search open
+// it does nothing at all, so a screen may call it to be sure — which is what
+// the archive browser does on its way out, rather than asking first.
 func (b *browser) closeFilter() {
+	if b.filter == nil {
+		return
+	}
 	b.filter.close()
 	b.filter = nil
 	b.cursor, b.offset = 0, 0

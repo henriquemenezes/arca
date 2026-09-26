@@ -403,7 +403,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.browser.height = maxInt(6, msg.Height-14)
-		m.fitSourceFields()
+		m.fitBrowserFields()
 		m.bar.Width = minInt(60, maxInt(20, msg.Width-20))
 		return m, nil
 

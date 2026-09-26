@@ -705,7 +705,6 @@ func (m *model) viewPickArchive() chrome {
 	c := chrome{
 		title: "Choose an archive to inspect",
 		crumb: m.readCrumb("archive"),
-		keys:  []binding{kMove, kOpen, kUp, kHome, kHidden, kPage, kEdge},
 		// The browser here picks one file, so enter is what chooses it rather
 		// than what moves on.
 		primary: confirm("choose"),
@@ -714,9 +713,27 @@ func (m *model) viewPickArchive() chrome {
 	if m.intent == intentRestore {
 		c.title = "Choose an archive to restore"
 	}
+	m.pickArchiveKeys(&c)
+
 	m.browser.height = maxInt(3, m.bodyRows(c)-3)
-	c.body = m.browser.View(m.inner()-2, nil)
+	c.body = m.browser.View(m.browserWidth(), nil)
 	return c
+}
+
+// pickArchiveKeys names the keys for whichever of the screen's two jobs has
+// the keyboard. The search takes it whole — every printable key is a character
+// of the query — so naming the file list's keys while it is open would name
+// keys that do nothing.
+func (m *model) pickArchiveKeys(c *chrome) {
+	if m.browser.filter == nil {
+		c.keys = []binding{kMove, kFind, kOpen, kUp, kHome, kHidden, kPage, kEdge}
+		return
+	}
+	// Enter does both things a row can be for, and which one it does depends on
+	// the row rather than on a key, so it is worth a line saying so.
+	c.subtitle = []string{"Enter opens a directory, or chooses the archive under the cursor."}
+	c.keys = []binding{kMove, kComplete, kClear}
+	c.back = leave("leave search")
 }
 
 func (m *model) viewArchiveKey() chrome {
