@@ -22,6 +22,12 @@ arca backup --source ~/.ssh:dotfiles --source ~/.aws:dotfiles -o ~/backups/
 produces one file — `arca-<host>-<timestamp>.tar.zst.age` — and nothing else.
 No sidecar, no index, no repository.
 
+Or you can just run `arca` and answer what it asks:
+
+<p align="center">
+  <img alt="arca's interactive menu" src="docs/assets/arca-screenshot.png" width="620">
+</p>
+
 ## Why not restic, borg or kopia
 
 Those are repository engines built for frequent incremental backups of data that
