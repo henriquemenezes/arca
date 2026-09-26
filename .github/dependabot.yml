@@ -1,16 +1,16 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
+# Dependency updates. See
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "gomod" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # A backup tool ships its dependencies inside a static binary, so an upstream
+  # fix only reaches users through a release here.
+  - package-ecosystem: "gomod"
+    directory: "/"
     schedule:
       interval: "daily"
 
-  # Keeps the pinned action majors in ci.yml current.
+  # Keeps the pinned action majors in ci.yml and release.yml current.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

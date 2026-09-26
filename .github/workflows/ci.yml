@@ -55,6 +55,23 @@ jobs:
             exit 1
           fi
 
+  # The binary is cross-compiled to darwin, and the walker reads uid/gid, device
+  # and inode numbers through syscall. Cross-compiling proves it builds there;
+  # only this job proves it runs there.
+  test-macos:
+    name: test (macos)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Unit tests, with the race detector
+        run: make test
+
   lint:
     name: lint
     runs-on: ubuntu-latest
