@@ -1,48 +1,47 @@
-# arca — identidade visual
+# arca — visual identity
 
-## Arquivos
+## Files
 
-| Arquivo | Uso |
+| File | Use |
 |---|---|
-| `arca-logo-dark.svg` / `.png` | Lockup horizontal, fundo transparente, letras claras — README em tema escuro |
-| `arca-logo-light.svg` / `.png` | Lockup horizontal, fundo transparente, letras escuras — README em tema claro, site, docs |
-| `arca-banner.svg` / `.png` | Lockup sobre placa escura arredondada — topo do README, slides |
-| `arca-icon.svg`, `arca-icon-512.png` | Só o símbolo, transparente |
-| `arca-icon-badge.svg`, `arca-icon-badge-512.png`, `-256.png` | Símbolo em placa arredondada — avatar da org, ícone de app, Homebrew |
-| `favicon-64.png`, `favicon-32.png` | Favicon das docs |
-| `arca-social.svg`, `arca-social-1280x640.png` | Social preview do GitHub (Settings → Social preview) |
-| `arca-ascii.txt` | Todas as variantes ASCII do banner do CLI |
+| `arca-logo-dark.svg` / `.png` | Horizontal lockup, transparent background, light letters — README in dark theme |
+| `arca-logo-light.svg` / `.png` | Horizontal lockup, transparent background, dark letters — README in light theme, site, docs |
+| `arca-banner.svg` / `.png` | Lockup on a rounded dark plate — top of the README, slides |
+| `arca-icon.svg`, `arca-icon-512.png` | The symbol alone, transparent |
+| `arca-icon-badge.svg`, `arca-icon-badge-512.png`, `-256.png` | Symbol on a rounded plate — org avatar, app icon, Homebrew |
+| `favicon-64.png`, `favicon-32.png` | Favicon for the docs |
+| `arca-social.svg`, `arca-social-1280x640.png` | GitHub social preview (Settings → Social preview) |
+| `arca-ascii.txt` | Every ASCII variant of the CLI banner |
 
-Nenhum SVG depende de fonte instalada: o logotipo "arca" é desenhado em
-paths, então renderiza idêntico em qualquer navegador, no GitHub e em
-qualquer conversor.
+No SVG depends on an installed font: the "arca" wordmark is drawn as paths, so
+it renders identically in any browser, on GitHub, and in any converter.
 
-## Paleta
+## Palette
 
-| Papel | Hex | ANSI truecolor |
+| Role | Hex | ANSI truecolor |
 |---|---|---|
-| Casco, cursor, prompt | `#56D364` | `38;2;86;211;100` |
-| Telhado, moldura da cabine | `#3FB950` | `38;2;63;185;80` |
-| Água | `#58A6FF` | `38;2;88;166;255` |
-| Fechadura (criptografia) | `#E3B341` | `38;2;227;179;65` |
-| Texto claro | `#E6EDF3` | `38;2;230;237;243` |
-| Fundo terminal | `#0D1117` | — |
-| Superfície | `#161B22` | — |
+| Hull, cursor, prompt | `#56D364` | `38;2;86;211;100` |
+| Roof, cabin frame | `#3FB950` | `38;2;63;185;80` |
+| Water | `#58A6FF` | `38;2;88;166;255` |
+| Lock (encryption) | `#E3B341` | `38;2;227;179;65` |
+| Light text | `#E6EDF3` | `38;2;230;237;243` |
+| Terminal background | `#0D1117` | — |
+| Surface | `#161B22` | — |
 
-É a paleta do GitHub Dark, que por sua vez segue as cores clássicas de
-terminal (verde de sucesso, azul de informação, âmbar de atenção). Em
-terminais de 16 cores, degrade para `92` / `32` / `94` / `93` / `97`.
+This is the GitHub Dark palette, which in turn follows the classic terminal
+colors (green for success, blue for information, amber for attention). On
+16-color terminals, degrade to `92` / `32` / `94` / `93` / `97`.
 
-## Tipografia
+## Typography
 
-O logotipo é desenhado, não composto. Para textos que acompanham a marca
-(docs, site, `--help`), use uma monoespaçada de grade larga:
-**JetBrains Mono**, **IBM Plex Mono** ou **Iosevka**. Todas têm licença
-aberta e um `a` de caixa-baixa de um andar, que combina com o logotipo.
+The wordmark is drawn, not typeset. For text that accompanies the brand (docs,
+site, `--help`), use a wide-grid monospace: **JetBrains Mono**, **IBM Plex
+Mono** or **Iosevka**. All are openly licensed and have a single-storey
+lowercase `a`, which matches the wordmark.
 
-## Snippet do README
+## README snippet
 
-Troca automática entre tema claro e escuro no GitHub:
+Automatic light/dark switching on GitHub:
 
 ```html
 <p align="center">
@@ -54,13 +53,13 @@ Troca automática entre tema claro e escuro no GitHub:
 </p>
 
 <p align="center">
-  backup cifrado e comprimido para Linux e macOS
+  Single-file encrypted backups for Unix. One binary, no runtime dependencies.
 </p>
 ```
 
-## Regras de uso
+## Usage rules
 
-- Espaço livre em volta da marca: a altura do bloco do cursor (o quadrado verde).
-- Tamanho mínimo do lockup: 120 px de largura. Abaixo disso, use só o símbolo.
-- Não gire a arca, não troque o verde do casco e não coloque a versão de
-  fundo transparente sobre fotos — use `arca-banner.svg`.
+- Clear space around the mark: the height of the cursor block (the green square).
+- Minimum lockup size: 120 px wide. Below that, use the symbol alone.
+- Do not rotate the ark, do not change the green of the hull, and do not place
+  the transparent-background version over photos — use `arca-banner.svg`.
