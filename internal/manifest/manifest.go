@@ -14,8 +14,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/walk"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/walk"
 )
 
 // FormatVersion guards future changes to these documents. A reader that meets a

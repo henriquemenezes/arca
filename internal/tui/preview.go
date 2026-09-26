@@ -11,9 +11,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hamsa/arca/internal/cli"
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/walk"
+	"github.com/henriquemenezes/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/walk"
 )
 
 // The source screen is two columns: the browser on the left, and what has been

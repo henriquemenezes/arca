@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hamsa/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/cli"
 )
 
 // These exercise the whole command tree the way a user does, in process.

@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/walk"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/walk"
 )
 
 // ---------- helpers ----------

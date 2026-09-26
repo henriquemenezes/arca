@@ -13,10 +13,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hamsa/arca/internal/archive"
-	"github.com/hamsa/arca/internal/cli"
-	"github.com/hamsa/arca/internal/codec"
-	"github.com/hamsa/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/config"
 )
 
 type state int

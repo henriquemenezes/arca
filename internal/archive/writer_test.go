@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hamsa/arca/internal/archive"
-	"github.com/hamsa/arca/internal/codec"
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/manifest"
 )
 
 const testPass = "correct-horse-battery-staple-arca"

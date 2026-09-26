@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hamsa/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/config"
 )
 
 // tree builds a directory and returns it. Every test here works inside its own

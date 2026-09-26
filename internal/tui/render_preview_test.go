@@ -7,9 +7,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hamsa/arca/internal/archive"
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/manifest"
 )
 
 // TestRenderPreview is a development aid: `go test -run RenderPreview -v`

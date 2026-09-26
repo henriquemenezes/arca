@@ -21,7 +21,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/hamsa/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/codec"
 )
 
 // ManifestName is the first member of every archive: what the backup intended

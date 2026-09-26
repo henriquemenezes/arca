@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/hamsa/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/archive"
 )
 
 // progressPrinter renders a single updating line on a terminal, and stays quiet

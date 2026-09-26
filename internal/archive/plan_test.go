@@ -3,7 +3,7 @@ package archive_test
 import (
 	"testing"
 
-	"github.com/hamsa/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/archive"
 )
 
 func TestPlanCountsPerSourceWithoutWriting(t *testing.T) {

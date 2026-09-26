@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hamsa/arca/internal/codec"
-	"github.com/hamsa/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/manifest"
 )
 
 type RestoreOptions struct {

@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/hamsa/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/config"
 )
 
 // Version is set at build time via -ldflags.

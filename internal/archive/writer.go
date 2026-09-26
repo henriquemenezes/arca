@@ -14,9 +14,9 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/hamsa/arca/internal/codec"
-	"github.com/hamsa/arca/internal/manifest"
-	"github.com/hamsa/arca/internal/walk"
+	"github.com/henriquemenezes/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/walk"
 )
 
 // PartialSuffix marks an archive still being written. The final name appears

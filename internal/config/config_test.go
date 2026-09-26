@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hamsa/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/config"
 )
 
 func parse(t *testing.T, src string) *config.Config {

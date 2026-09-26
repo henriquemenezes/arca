@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hamsa/arca/internal/codec"
-	"github.com/hamsa/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/manifest"
 )
 
 // peekSize is how much of a stream is buffered before identifying it. It only

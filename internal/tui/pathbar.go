@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hamsa/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/cli"
 )
 
 // The source screen's path bar: the line naming the directory on screen, made

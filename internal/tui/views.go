@@ -8,8 +8,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hamsa/arca/internal/cli"
-	"github.com/hamsa/arca/internal/secret"
+	"github.com/henriquemenezes/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/secret"
 )
 
 func timeNow() time.Time { return time.Now() }

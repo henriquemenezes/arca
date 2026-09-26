@@ -10,11 +10,11 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hamsa/arca/internal/archive"
-	"github.com/hamsa/arca/internal/cli"
-	"github.com/hamsa/arca/internal/codec"
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/secret"
+	"github.com/henriquemenezes/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/secret"
 )
 
 func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

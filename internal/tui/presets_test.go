@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hamsa/arca/internal/walk"
+	"github.com/henriquemenezes/arca/internal/walk"
 )
 
 // ---------- the catalogue ----------

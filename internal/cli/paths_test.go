@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hamsa/arca/internal/cli"
-	"github.com/hamsa/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/codec"
 )
 
 // TestMain fences the whole package away from the real home directory.

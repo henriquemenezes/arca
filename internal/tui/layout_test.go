@@ -7,8 +7,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hamsa/arca/internal/archive"
-	"github.com/hamsa/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/manifest"
 )
 
 // fitsIn says the screen drew inside the terminal it was given.

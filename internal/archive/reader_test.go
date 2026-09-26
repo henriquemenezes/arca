@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hamsa/arca/internal/archive"
-	"github.com/hamsa/arca/internal/codec"
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/manifest"
 )
 
 func keyring() *codec.Keyring { return &codec.Keyring{Passphrase: []byte(testPass)} }

@@ -5,9 +5,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/hamsa/arca/internal/codec"
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/manifest"
 )
 
 func printStats(w io.Writer, title string, s manifest.Stats) {

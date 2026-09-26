@@ -1,9 +1,9 @@
 package archive
 
 import (
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/manifest"
-	"github.com/hamsa/arca/internal/walk"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/walk"
 )
 
 // PlanSource is what one configured source contributes.

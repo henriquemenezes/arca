@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hamsa/arca/internal/secret"
+	"github.com/henriquemenezes/arca/internal/secret"
 )
 
 // ---------- wordlist ----------

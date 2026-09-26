@@ -9,8 +9,8 @@ package main
 import (
 	"os"
 
-	"github.com/hamsa/arca/internal/cli"
-	"github.com/hamsa/arca/internal/tui"
+	"github.com/henriquemenezes/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/tui"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".

@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hamsa/arca/internal/archive"
-	"github.com/hamsa/arca/internal/manifest"
-	"github.com/hamsa/arca/internal/secret"
+	"github.com/henriquemenezes/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/manifest"
+	"github.com/henriquemenezes/arca/internal/secret"
 )
 
 func newListCommand() *cobra.Command {

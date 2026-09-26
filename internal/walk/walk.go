@@ -21,7 +21,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
-	"github.com/hamsa/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/config"
 )
 
 type Kind int

@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hamsa/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/cli"
 )
 
 // The source screen's finder.

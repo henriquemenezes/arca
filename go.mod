@@ -1,4 +1,4 @@
-module github.com/hamsa/arca
+module github.com/henriquemenezes/arca
 
 go 1.26.2
 

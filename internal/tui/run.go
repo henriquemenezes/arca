@@ -3,7 +3,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hamsa/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/archive"
 )
 
 type progressMsg archive.Progress

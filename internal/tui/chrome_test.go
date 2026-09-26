@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hamsa/arca/internal/archive"
-	"github.com/hamsa/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/config"
 )
 
 // at builds a model sized to a terminal, which is what every layout assertion

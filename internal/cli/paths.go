@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hamsa/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/codec"
 )
 
 // ConfigFileName is the conventional config name, looked up in the working

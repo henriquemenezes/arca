@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hamsa/arca/internal/cli"
+	"github.com/henriquemenezes/arca/internal/cli"
 )
 
 // Ready-made exclude patterns, offered by A on the excludes panel.

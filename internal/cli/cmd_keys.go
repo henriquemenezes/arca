@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hamsa/arca/internal/secret"
+	"github.com/henriquemenezes/arca/internal/secret"
 )
 
 //nolint:lll // the sample is meant to be read as a file, not as source

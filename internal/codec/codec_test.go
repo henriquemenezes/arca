@@ -10,7 +10,7 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/hamsa/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/codec"
 )
 
 // ---------- helpers ----------

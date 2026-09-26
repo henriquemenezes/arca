@@ -10,10 +10,10 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/hamsa/arca/internal/archive"
-	"github.com/hamsa/arca/internal/codec"
-	"github.com/hamsa/arca/internal/config"
-	"github.com/hamsa/arca/internal/secret"
+	"github.com/henriquemenezes/arca/internal/archive"
+	"github.com/henriquemenezes/arca/internal/codec"
+	"github.com/henriquemenezes/arca/internal/config"
+	"github.com/henriquemenezes/arca/internal/secret"
 )
 
 // DefaultIdentityName is where `arca gen-key` puts a generated identity, and
