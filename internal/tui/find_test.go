@@ -751,7 +751,7 @@ func TestTheSearchDrawsWholePaths(t *testing.T) {
 // the part that tells one row from another.
 func TestAPathTooLongForTheColumnKeepsItsEnd(t *testing.T) {
 	sep := string(filepath.Separator)
-	p := filepath.Join(sep, "home", "hamsa", "Work", "site", "downloads-archive")
+	p := filepath.Join(sep, "home", "user", "Work", "site", "downloads-archive")
 
 	if got := fitPath(p, 80); got != p {
 		t.Errorf("a path that fits was shortened to %q", got)
@@ -769,8 +769,8 @@ func TestAPathTooLongForTheColumnKeepsItsEnd(t *testing.T) {
 	}
 
 	// Two matches under one root have to stay two different lines.
-	a := fitPath(filepath.Join(sep, "home", "hamsa", ".config", "nvim"), 20)
-	b := fitPath(filepath.Join(sep, "home", "hamsa", ".local", "share", "nvim"), 20)
+	a := fitPath(filepath.Join(sep, "home", "user", ".config", "nvim"), 20)
+	b := fitPath(filepath.Join(sep, "home", "user", ".local", "share", "nvim"), 20)
 	if a == b {
 		t.Errorf("two different paths both drew as %q", a)
 	}

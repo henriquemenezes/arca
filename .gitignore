@@ -1,6 +1,24 @@
+# Build artefacts
 /arca
+/dist/
+*.test
+*.out
+coverage.*
+
+# Tools fetched by the Makefile
 /.tools/
+
+# Never commit anything a backup run produces or reads.
+# Unanchored on purpose: an archive or a key in any subdirectory is a mistake.
 *.tar.zst.age
 *.tar.zst.age.partial
+*.partial
 arca.toml
 identity.age
+
+# Editors and local environments
+.idea/
+.vscode/
+.direnv/
+.envrc
+.DS_Store
