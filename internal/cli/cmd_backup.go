@@ -144,7 +144,7 @@ func newBackupCommand() *cobra.Command {
 			PrintWarnings(out, res.Warnings)
 
 			fmt.Fprintf(out, "\n%s\n  %s\n",
-				StyleTitle.Render("Restore without arca, on any Unix machine:"),
+				StyleTitle.Render("Restore without arca, with age, zstd and tar:"),
 				StyleKey.Render(ManualRestoreCommand(res.Path, cfg)))
 			fmt.Fprintln(out)
 			PrintSecretNotice(out)

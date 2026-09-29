@@ -7,7 +7,8 @@
 </p>
 
 <p align="center">
-  Single-file encrypted backups for Unix. One binary, no runtime dependencies.
+  Single-file encrypted backups for Unix-like systems. One binary, no runtime
+  dependencies.
 </p>
 
 <p align="center">
@@ -61,8 +62,10 @@ cd arca
 make build      # ./arca, static, cgo-free
 ```
 
-Linux and macOS, amd64 and arm64. There is no Windows build: the tool restores
-Unix ownership and permission bits, which is most of what it is for.
+Releases are built for Linux and macOS, amd64 and arm64; other Unix-likes
+(FreeBSD, illumos) compile but are not tested. There is no Windows build: the
+archive carries uid/gid and permission bits, and putting them back (ownership
+with `--preserve-owner`) is most of what the tool is for.
 
 ## Why not restic, borg or kopia
 
@@ -93,10 +96,12 @@ has not:
 age -d archive.tar.zst.age | zstd -d | tar -xp -C /destination
 ```
 
-Three tools in every distribution's repositories. This is a design invariant,
-covered by a test that runs the real `age`, `zstd` and `tar` binaries against a
-real archive on every CI run — if it ever stops passing, the project has lost
-its reason to exist.
+Three tools every distribution packages. None of them is in a base install —
+`age` least of all — but all three are one package manager away, and the
+one-liner above wants GNU tar or bsdtar for its `-C`. This is a design
+invariant, covered by a test that runs the real `age`, `zstd` and `tar`
+binaries against a real archive on every Linux CI run — if it ever stops
+passing, the project has lost its reason to exist.
 
 ## The mapping
 
@@ -195,8 +200,8 @@ exists and otherwise asks for the passphrase.
 
 ### Where arca keeps things
 
-`~/.arca/` holds the config and the key, and is the same path on every Unix —
-one directory to put back on a machine you have just reinstalled.
+`~/.arca/` holds the config and the key, and is the same path on Linux and on
+macOS — one directory to put back on a machine you have just reinstalled.
 
 | | |
 |---|---|
@@ -326,8 +331,8 @@ make check     # everything CI runs: lint, govulncheck, tests
 make cross     # prove it cross-compiles to linux and darwin, amd64 and arm64
 ```
 
-`make check` includes the emergency-restore tests, which fetch a stock `age`
-binary into `.tools/` and need `zstd` and `tar` on the `PATH`.
+`make check` includes the emergency-restore tests, which build an `age` binary
+into `.tools/` and need `zstd` and `tar` on the `PATH`.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the workflow and what a pull request
 is expected to carry. To report a vulnerability, follow

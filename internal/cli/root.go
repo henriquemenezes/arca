@@ -129,7 +129,7 @@ func NewRootCommand(runTUI func() error) *cobra.Command {
 
 	root := &cobra.Command{
 		Use:           "arca",
-		Short:         "Single-file encrypted backups for Unix",
+		Short:         "Single-file encrypted backups for Unix-like systems",
 		Long:          long,
 		Version:       Version,
 		SilenceUsage:  true,

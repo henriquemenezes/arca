@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While the major version is 0, the command-line interface and the interactive
 screens may change between minor versions; the **archive format will not break
 without a major version**, and any archive arca has written stays restorable
-with stock `age`, `zstd` and `tar` regardless.
+with `age`, `zstd` and `tar` regardless.
 
 ## [Unreleased]
 

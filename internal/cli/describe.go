@@ -30,8 +30,8 @@ func encryptionDescription(cfg *config.Config) string {
 	return cfg.Settings.Cipher + ", passphrase"
 }
 
-// ManualRestoreCommand renders the command that restores an archive with stock
-// Unix tools. It is printed after every backup, because the guarantee is only
+// ManualRestoreCommand renders the command that restores an archive with age,
+// zstd and tar. It is printed after every backup, because the guarantee is only
 // useful if the user knows it exists.
 func ManualRestoreCommand(path string, cfg *config.Config) string {
 	comp, err := codec.GetCompressor(cfg.Settings.Compressor)

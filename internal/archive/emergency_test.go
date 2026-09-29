@@ -17,21 +17,21 @@ import (
 )
 
 // The central promise of this design is that an archive can be restored on a
-// freshly installed machine with nothing but the stock age, zstd and tar
-// binaries. If these tests pass, the tool is never a single point of failure
-// for its own backups.
+// machine with nothing but the upstream age, zstd and tar binaries — none of
+// which arca ships. If these tests pass, the tool is never a single point of
+// failure for its own backups.
 //
 // Point ARCA_TEST_AGE at an age binary, or have one on PATH. `make check`
 // fetches one into .tools/ and sets the variable.
 
-func stockAge(t *testing.T) string {
+func upstreamAge(t *testing.T) string {
 	t.Helper()
 	if p := os.Getenv("ARCA_TEST_AGE"); p != "" {
 		return p
 	}
 	p, err := exec.LookPath("age")
 	if err != nil {
-		t.Skip("no stock age binary: set ARCA_TEST_AGE or install age (see `make tools`)")
+		t.Skip("no age binary: set ARCA_TEST_AGE or install age (see `make tools`)")
 	}
 	return p
 }
@@ -97,10 +97,10 @@ func emergencyArchive(t *testing.T) (archivePath, identityPath string) {
 	return archivePath, identityPath
 }
 
-// TestEmergencyRestoreWithStockUnixTools is the acceptance criterion for the
+// TestEmergencyRestoreWithUpstreamTools is the acceptance criterion for the
 // whole project: `age -d | zstd -d | tar -x`, no arca anywhere in the chain.
-func TestEmergencyRestoreWithStockUnixTools(t *testing.T) {
-	ageBin := stockAge(t)
+func TestEmergencyRestoreWithUpstreamTools(t *testing.T) {
+	ageBin := upstreamAge(t)
 	requireTool(t, "zstd")
 	requireTool(t, "tar")
 
@@ -152,8 +152,8 @@ func TestEmergencyRestoreWithStockUnixTools(t *testing.T) {
 
 // The manifest must be readable with stock tools as well, so someone who finds
 // an old archive can learn what it holds before committing to a restore.
-func TestManifestIsReadableWithStockTools(t *testing.T) {
-	ageBin := stockAge(t)
+func TestManifestIsReadableWithUpstreamTools(t *testing.T) {
+	ageBin := upstreamAge(t)
 	requireTool(t, "zstd")
 	requireTool(t, "tar")
 

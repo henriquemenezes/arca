@@ -53,7 +53,8 @@ Automatic light/dark switching on GitHub:
 </p>
 
 <p align="center">
-  Single-file encrypted backups for Unix. One binary, no runtime dependencies.
+  Single-file encrypted backups for Unix-like systems. One binary, no runtime
+  dependencies.
 </p>
 ```
 

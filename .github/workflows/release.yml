@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  # A release that has not passed the stock-tool restore test is not a release.
+  # A release that has not passed the emergency-restore test is not a release.
   verify:
     name: verify
     runs-on: ubuntu-latest

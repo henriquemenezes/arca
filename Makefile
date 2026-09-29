@@ -9,11 +9,11 @@ VULN_VER := v1.8.0
 DIST     := dist
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 
-.PHONY: help build install test test-stock check tools lint fmt vuln clean cross dist licenses
+.PHONY: help build install test test-upstream check tools lint fmt vuln clean cross dist licenses
 
 ## help: list the targets in this file
 help:
-	@sed -n 's/^## //p' $(MAKEFILE_LIST) | awk -F': ' '{printf "  \033[1m%-12s\033[0m %s\n", $$1, $$2}'
+	@sed -n 's/^## //p' $(MAKEFILE_LIST) | awk -F': ' '{printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2}'
 
 ## build: compile the binary (static, no cgo)
 build:
@@ -27,7 +27,7 @@ install:
 test:
 	go test ./... -race
 
-## tools: fetch the stock age binary used by the emergency-restore tests
+## tools: build the age binary used by the emergency-restore tests
 tools: $(TOOLS)/age
 
 $(TOOLS)/age:
@@ -42,12 +42,12 @@ $(TOOLS)/govulncheck:
 	@mkdir -p $(TOOLS)
 	GOBIN=$(CURDIR)/$(TOOLS) go install golang.org/x/vuln/cmd/govulncheck@$(VULN_VER)
 
-## test-stock: the tests plus the restore path that uses stock age/zstd/tar
-test-stock: tools
+## test-upstream: the tests plus the restore path that uses real age/zstd/tar
+test-upstream: tools
 	ARCA_TEST_AGE=$(CURDIR)/$(TOOLS)/age go test ./... -race -timeout 20m
 
 ## check: everything CI runs
-check: lint vuln test-stock
+check: lint vuln test-upstream
 
 ## lint: static analysis (vet, staticcheck, errcheck, gosec, ...) and formatting
 lint: $(TOOLS)/golangci-lint

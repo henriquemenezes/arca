@@ -18,8 +18,8 @@ env:
   LINT_VERSION: v2.14.0
 
 jobs:
-  # The acceptance criterion of the whole project: an archive restores with
-  # stock age, zstd and tar. That has to run here, not be skipped here.
+  # The acceptance criterion of the whole project: an archive restores with the
+  # real age, zstd and tar. That has to run here, not be skipped here.
   test:
     name: test
     runs-on: ubuntu-latest
@@ -33,25 +33,29 @@ jobs:
           go-version: stable
           check-latest: true
 
-      - name: Stock zstd and tar
+      - name: The zstd and tar binaries
         run: |
           command -v zstd >/dev/null || { sudo apt-get update && sudo apt-get install -y zstd; }
           zstd --version
           tar --version | head -1
 
-      - name: Stock age binary
+      - name: The age binary
         run: make tools
 
       - name: Tests, with the race detector
-        run: make test-stock
+        run: make test-upstream
 
-      - name: The stock-tool restore tests must not have been skipped
+      - name: The emergency-restore tests must not have been skipped
         run: |
           set -o pipefail
           ARCA_TEST_AGE="$PWD/.tools/age" \
-            go test ./internal/archive -run Stock -v 2>&1 | tee test.log
+            go test ./internal/archive -run UpstreamTools -v -count=1 2>&1 | tee test.log
           if grep -q -- '--- SKIP' test.log; then
-            echo "::error::emergency-restore tests skipped; a stock tool is missing"
+            echo "::error::emergency-restore tests skipped; an external tool is missing"
+            exit 1
+          fi
+          if grep -q 'no tests to run' test.log; then
+            echo "::error::the -run filter matched no test; a rename broke this guard"
             exit 1
           fi
 

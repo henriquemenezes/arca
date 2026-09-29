@@ -11,9 +11,9 @@ It helps to know where the line is before writing code:
 
 - arca writes **one self-contained file** per backup. No sidecar files, no
   index, no repository. Anything that needs state beside the archive is out.
-- The archive stays **plain `tar` + `zstd` + `age`**, restorable with stock
-  tools. A change that makes `age -d … | zstd -d | tar -x` stop working will
-  not be merged, whatever it buys.
+- The archive stays **plain `tar` + `zstd` + `age`**, restorable without arca.
+  A change that makes `age -d … | zstd -d | tar -x` stop working will not be
+  merged, whatever it buys.
 - **Full backups only.** Incrementals and deduplication are what restic, borg
   and kopia are for.
 - The three front-ends (TUI, `arca.toml`, flags) converge on one
@@ -36,14 +36,14 @@ make check     # lint + govulncheck + the whole test suite
 ```
 
 `make check` is exactly what CI runs. If it passes locally, CI should pass too.
-It fetches a stock `age` binary into `.tools/` on first run.
+It builds an `age` binary into `.tools/` on first run.
 
 ## Pull requests
 
 - **`make check` passes.** Formatting is `golangci-lint fmt` (gofmt +
   goimports); `make fmt` applies it.
 - **New behaviour comes with a test.** The safety-critical paths — restore
-  containment, exclude matching, key handling, the stock-tool restore — are
+  containment, exclude matching, key handling, the emergency restore — are
   tested, and they stay that way.
 - **One concern per pull request.** A refactor and a feature in the same diff
   are hard to review and harder to revert.
@@ -59,12 +59,12 @@ It fetches a stock `age` binary into `.tools/` on first run.
 ## Tests
 
 ```bash
-make test        # unit tests, race detector
-make test-stock  # the above plus the restore path using stock age/zstd/tar
+make test           # unit tests, race detector
+make test-upstream  # the above plus the restore path using real age/zstd/tar
 ```
 
 Tests must never touch a real home directory: `$ARCA_HOME` and `t.TempDir()`
-are what keep them fenced in. Tests that need a stock tool skip when it is
+are what keep them fenced in. Tests that need an external tool skip when it is
 missing locally, but CI fails if they skip there.
 
 ## Reporting bugs

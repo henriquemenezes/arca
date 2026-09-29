@@ -676,7 +676,7 @@ func (m *model) viewDone() chrome {
 			" recorded in the archive summary") + "\n")
 	}
 
-	b.WriteString("\n" + stTitle.Render("Restore without arca, on any Unix machine") + "\n")
+	b.WriteString("\n" + stTitle.Render("Restore without arca, with age, zstd and tar") + "\n")
 	b.WriteString("  " + stPayload.Render(cli.ManualRestoreCommand(m.result.Path, m.cfg)) + "\n\n")
 
 	text := cli.SecretNotice

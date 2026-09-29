@@ -24,7 +24,7 @@ const (
 // UserDir is where arca writes the config and the key: ~/.arca.
 //
 // Deliberately not the XDG location, and the only place arca looks. It is the
-// same path on every Unix and on macOS, next to the ~/.ssh and ~/.gnupg it
+// same path on Linux and on macOS, next to the ~/.ssh and ~/.gnupg it
 // exists to protect, and a restore onto a freshly installed machine is one
 // directory to put back.
 //
