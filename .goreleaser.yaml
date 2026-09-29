@@ -1,0 +1,105 @@
+# Release engine. Development still goes through the Makefile: `make build`
+# compiles one binary for this machine, `make cross` proves every target still
+# compiles, `make snapshot` runs this file without needing a tag.
+#
+# The archive format is not defined here and never will be: it is tar + zstd +
+# age, produced by the code, restorable with stock tools. This file only decides
+# how the *binary* reaches people.
+version: 2
+
+project_name: arca
+
+metadata:
+  # Reproducible builds: nothing in the output may depend on the wall clock.
+  mod_timestamp: "{{ .CommitTimestamp }}"
+
+before:
+  hooks:
+    # MIT, BSD and Apache-2.0 all require their notice to travel with a binary
+    # distribution. Written to the repo root, which .gitignore covers, so the
+    # tree stays clean - GoReleaser refuses to release from a dirty tree.
+    - ./scripts/third-party-licenses.sh THIRD_PARTY_LICENSES.md
+
+builds:
+  - main: ./cmd/arca
+    binary: arca
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    # .Tag, not .Version: `git describe` and `make build` both report the
+    # leading v, and `arca --version` must not change meaning per build path.
+    ldflags:
+      - -s -w -X main.version={{ .Tag }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    # 32-bit arm is for the Raspberry Pi and NAS boxes people back up to.
+    goarm:
+      - "7"
+    ignore:
+      # There is no 32-bit arm macOS.
+      - goos: darwin
+        goarch: arm
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive
+
+signs:
+  # Keyless: the signing identity is the workflow itself, proven by the OIDC
+  # token, and recorded in Sigstore's transparency log. No private key exists to
+  # leak or rotate.
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+nfpms:
+  # The binary is static and shells out to nothing, so these packages have no
+  # dependencies and one build serves every version of every Debian or RPM
+  # derivative. No archlinux here on purpose: extra/arca already owns
+  # /usr/bin/arca on Arch.
+  - formats: [deb, rpm, apk]
+    maintainer: Henrique Almeida <floresta.henrique@gmail.com>
+    description: Single-file encrypted backups, restorable with stock tar, zstd and age.
+    homepage: https://github.com/henriquemenezes/arca
+    license: MIT
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/arca/LICENSE
+      - src: NOTICE
+        dst: /usr/share/doc/arca/NOTICE
+      - src: README.md
+        dst: /usr/share/doc/arca/README.md
+
+changelog:
+  # Same notes the old `gh release create --generate-notes` produced.
+  use: github-native
+
+release:
+  extra_files:
+    - glob: ./THIRD_PARTY_LICENSES.md

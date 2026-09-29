@@ -5,11 +5,11 @@ TOOLS    := .tools
 AGE_VER  := v1.3.2
 LINT_VER := v2.14.0
 VULN_VER := v1.8.0
+GREL_VER := v2.18.2
 
 DIST     := dist
-PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 
-.PHONY: help build install test test-upstream check tools lint fmt vuln clean cross dist licenses
+.PHONY: help build install test test-upstream check tools lint fmt vuln clean cross snapshot release-check licenses
 
 ## help: list the targets in this file
 help:
@@ -66,25 +66,31 @@ vuln: $(TOOLS)/govulncheck
 cross:
 	CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -o /dev/null ./cmd/arca
 	CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -o /dev/null ./cmd/arca
+	CGO_ENABLED=0 GOOS=linux  GOARCH=arm GOARM=7 go build -o /dev/null ./cmd/arca
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o /dev/null ./cmd/arca
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/arca
 
-## dist: build the release tarballs for every supported platform
-dist:
-	@rm -rf $(DIST) && mkdir -p $(DIST)
-	@for p in $(PLATFORMS); do \
-		os=$${p%/*}; arch=$${p#*/}; \
-		echo "  $$os/$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch \
-			go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/$(BIN) ./cmd/arca || exit 1; \
-		tar -czf $(DIST)/$(BIN)_$(VERSION)_$${os}_$${arch}.tar.gz \
-			-C $(DIST) $(BIN) -C $(CURDIR) LICENSE NOTICE README.md || exit 1; \
-		rm -f $(DIST)/$(BIN); \
-	done
+## snapshot: build every release artefact locally, without needing a tag
+# Signing is always skipped here: keyless cosign proves that the *workflow*
+# produced the artefact, so signing from a laptop would prompt a browser and
+# record the wrong identity. SBOMs need syft, which CI installs as a binary
+# rather than compiling, so they are skipped unless it is on PATH.
+snapshot: $(TOOLS)/goreleaser
+	@command -v syft >/dev/null || echo "  syft not on PATH: skipping SBOMs"
+	$(TOOLS)/goreleaser release --snapshot --clean --skip=sign \
+		$$(command -v syft >/dev/null || echo --skip=sbom)
+
+## release-check: validate .goreleaser.yaml
+release-check: $(TOOLS)/goreleaser
+	$(TOOLS)/goreleaser check
+
+$(TOOLS)/goreleaser:
+	@mkdir -p $(TOOLS)
+	GOBIN=$(CURDIR)/$(TOOLS) go install github.com/goreleaser/goreleaser/v2@$(GREL_VER)
 
 ## licenses: regenerate the third-party notice file attached to releases
 licenses:
 	./scripts/third-party-licenses.sh THIRD_PARTY_LICENSES.md
 
 clean:
-	rm -rf $(BIN) $(TOOLS) $(DIST)
+	rm -rf $(BIN) $(TOOLS) $(DIST) THIRD_PARTY_LICENSES.md

@@ -22,3 +22,6 @@ identity.age
 .direnv/
 .envrc
 .DS_Store
+
+# Generated at release time by scripts/third-party-licenses.sh
+/THIRD_PARTY_LICENSES.md
