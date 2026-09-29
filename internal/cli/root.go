@@ -15,8 +15,9 @@ import (
 	"github.com/henriquemenezes/arca/internal/config"
 )
 
-// Version is set at build time via -ldflags.
-var Version = "dev"
+// Version is what the binary reports and what archives record as their
+// ToolVersion. main resolves it; see ResolveVersion.
+var Version = devVersion
 
 type globalFlags struct {
 	configPath     string

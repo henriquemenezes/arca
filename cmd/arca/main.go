@@ -14,9 +14,11 @@ import (
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".
+// A build that cannot be given flags - `go install ...@v0.1.0` - leaves it
+// alone, and cli.ResolveVersion recovers the tag from the module metadata.
 var version = "dev"
 
 func main() {
-	cli.Version = version
+	cli.Version = cli.ResolveVersion(version)
 	os.Exit(cli.Execute(tui.Run))
 }
