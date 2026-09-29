@@ -38,14 +38,37 @@ Or you can just run `arca` and answer what it asks:
 
 ## Install
 
-**From a release** — download the archive for your platform from the
-[releases page](https://github.com/henriquemenezes/arca/releases), check it
-against `SHA256SUMS`, and put the binary on your `PATH`:
+**Homebrew** (macOS):
+
+```bash
+brew install --cask henriquemenezes/tap/arca
+```
+
+**Debian, Ubuntu, Fedora, Alpine** — take the package for your architecture from
+the [releases page](https://github.com/henriquemenezes/arca/releases):
+
+```bash
+sudo apt install ./arca_<version>_linux_amd64.deb   # or dnf install, or apk add
+```
+
+The binary is static and shells out to nothing, so the packages declare no
+dependencies and one of them serves every version of every derivative.
+
+**From a release** — download the archive for your platform, check it against
+`SHA256SUMS`, and put the binary on your `PATH`:
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
 tar -xzf arca_<version>_<os>_<arch>.tar.gz
 install -m 0755 arca ~/.local/bin/arca
+```
+
+**With a version manager** — the release assets follow the naming these tools
+autodetect, so there is nothing arca-specific to configure:
+
+```bash
+mise use -g github:henriquemenezes/arca   # also checks the provenance below
+ubi --project henriquemenezes/arca --in ~/.local/bin
 ```
 
 **With Go** (1.26.2 or newer):
@@ -62,10 +85,32 @@ cd arca
 make build      # ./arca, static, cgo-free
 ```
 
-Releases are built for Linux and macOS, amd64 and arm64; other Unix-likes
-(FreeBSD, illumos) compile but are not tested. There is no Windows build: the
-archive carries uid/gid and permission bits, and putting them back (ownership
-with `--preserve-owner`) is most of what the tool is for.
+Releases are built for Linux (amd64, arm64, armv7) and macOS (amd64, arm64);
+other Unix-likes (FreeBSD, illumos) compile but are not tested. There is no
+Windows build: the archive carries uid/gid and permission bits, and putting them
+back (ownership with `--preserve-owner`) is most of what the tool is for.
+
+### Verifying what you downloaded
+
+`SHA256SUMS` answers "is this the file the release page lists". It cannot answer
+"did arca's CI build it", which for a tool that handles your encryption keys is
+the more useful question. Every release also carries a keyless signature over
+the checksum file and a provenance attestation per artefact:
+
+```bash
+cosign verify-blob SHA256SUMS \
+  --signature SHA256SUMS.sig \
+  --certificate SHA256SUMS.pem \
+  --certificate-identity-regexp '^https://github\.com/henriquemenezes/arca/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+gh attestation verify arca_<version>_linux_amd64.tar.gz -R henriquemenezes/arca
+```
+
+No private key of ours signs either one. The signing identity is the release
+workflow itself, proven by its OIDC token and recorded in a public transparency
+log — so a release nobody here published is something you can detect rather than
+something you have to trust us about.
 
 ## Why not restic, borg or kopia
 
