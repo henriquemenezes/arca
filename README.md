@@ -100,8 +100,9 @@ Three tools every distribution packages. None of them is in a base install —
 `age` least of all — but all three are one package manager away, and the
 one-liner above wants GNU tar or bsdtar for its `-C`. This is a design
 invariant, covered by a test that runs the real `age`, `zstd` and `tar`
-binaries against a real archive on every Linux CI run — if it ever stops
-passing, the project has lost its reason to exist.
+binaries against a real archive on every CI run — against GNU tar on Linux and
+bsdtar on macOS — if it ever stops passing, the project has lost its reason to
+exist.
 
 ## The mapping
 

@@ -18,6 +18,19 @@ with `age`, `zstd` and `tar` regardless.
   is completed and a bare name is searched for below the directory on screen,
   so an archive several directories down is named rather than walked to.
 
+### Changed
+
+- The description says **Unix-like** rather than Unix, and no longer calls
+  `age` and `zstd` stock tools: neither ships in a base install, and the
+  restore one-liner needs GNU tar or bsdtar for its `-C`. The guarantee is
+  unchanged — only the claims about it are now accurate.
+- `make test-stock` is now `make test-upstream`.
+
+### Fixed
+
+- The emergency-restore tests run on macOS in CI as well, so the `tar -xp -C`
+  in the README is exercised against bsdtar and not only against GNU tar.
+
 ## [0.1.0] - 2026-09-26
 
 First public release.

@@ -62,6 +62,10 @@ jobs:
   # The binary is cross-compiled to darwin, and the walker reads uid/gid, device
   # and inode numbers through syscall. Cross-compiling proves it builds there;
   # only this job proves it runs there.
+  #
+  # It also runs the emergency restore, because the tar here is bsdtar: the one
+  # place the `tar -xp -C` in the README is exercised against something other
+  # than GNU tar.
   test-macos:
     name: test (macos)
     runs-on: macos-latest
@@ -73,8 +77,31 @@ jobs:
           go-version: stable
           check-latest: true
 
-      - name: Unit tests, with the race detector
-        run: make test
+      - name: The zstd and tar binaries
+        run: |
+          command -v zstd >/dev/null || brew install zstd
+          zstd --version
+          tar --version | head -1
+
+      - name: The age binary
+        run: make tools
+
+      - name: Tests, with the race detector
+        run: make test-upstream
+
+      - name: The emergency-restore tests must not have been skipped
+        run: |
+          set -o pipefail
+          ARCA_TEST_AGE="$PWD/.tools/age" \
+            go test ./internal/archive -run UpstreamTools -v -count=1 2>&1 | tee test.log
+          if grep -q -- '--- SKIP' test.log; then
+            echo "::error::emergency-restore tests skipped; an external tool is missing"
+            exit 1
+          fi
+          if grep -q 'no tests to run' test.log; then
+            echo "::error::the -run filter matched no test; a rename broke this guard"
+            exit 1
+          fi
 
   lint:
     name: lint
