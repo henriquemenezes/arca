@@ -96,6 +96,28 @@ nfpms:
       - src: README.md
         dst: /usr/share/doc/arca/README.md
 
+homebrew_casks:
+  # A cask, not a formula: it is how Homebrew expects a pre-compiled binary to
+  # arrive, and `brews` is deprecated. Casks are macOS-only, which costs
+  # nothing here - Linux has the packages above, the tarball, and mise/ubi.
+  - repository:
+      owner: henriquemenezes
+      name: homebrew-tap
+      # The workflow's default token cannot write to another repository.
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/henriquemenezes/arca
+    description: Single-file encrypted backups, restorable with stock tar, zstd and age.
+    license: MIT
+    hooks:
+      post:
+        # The binary is signed by no Apple certificate, so Gatekeeper would
+        # quarantine it on first run. Notarising costs 99 USD a year; removing
+        # the attribute Homebrew itself set is the honest alternative.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/arca"]
+          end
+
 changelog:
   # Same notes the old `gh release create --generate-notes` produced.
   use: github-native

@@ -69,6 +69,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Writing the cask into henriquemenezes/homebrew-tap is a push to
+          # another repository, which the token above is not allowed to make.
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
 
       # Binds every artefact to the commit, workflow and runner that produced
       # it. Users verify with `gh attestation verify <file> -R <repo>`.
