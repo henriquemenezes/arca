@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Keep in sync with GREL_VER in the Makefile.
+  GORELEASER_VERSION: v2.18.2
+
 jobs:
   # A release that has not passed the emergency-restore test is not a release.
   verify:
@@ -34,40 +38,45 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # create the release and upload the artefacts
+      id-token: write # the OIDC token cosign and the attestation sign with
+      attestations: write # store the provenance next to the artefacts
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # `git describe` needs the tags
+          fetch-depth: 0 # the tag and the changelog need the full history
 
       - uses: actions/setup-go@v7
         with:
           go-version: stable
           check-latest: true
 
-      # The tag name goes through the environment, never interpolated straight
-      # into a shell line.
-      - name: Build every platform
+      # Keyless: the signing identity is this workflow, proven by the OIDC
+      # token and recorded in Sigstore's transparency log. There is no private
+      # key to leak, which is the point for a tool that handles age keys.
+      - uses: sigstore/cosign-installer@v4
+
+      # GoReleaser shells out to syft to produce the SBOMs.
+      - uses: anchore/sbom-action/download-syft@v0
+
+      # Everything the old shell steps did - cross-compile, tarballs,
+      # SHA256SUMS, third-party licences, publish - now comes from
+      # .goreleaser.yaml, plus the packages, SBOMs and signatures.
+      - name: Build, package, sign and publish
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: ${{ env.GORELEASER_VERSION }}
+          args: release --clean
         env:
-          TAG: ${{ github.ref_name }}
-        run: make dist VERSION="$TAG"
+          GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Third-party licenses
-        run: ./scripts/third-party-licenses.sh dist/THIRD_PARTY_LICENSES.md
-
-      - name: Checksums
-        working-directory: dist
-        run: |
-          sha256sum *.tar.gz > SHA256SUMS
-          cat SHA256SUMS
-
-      - name: Publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --generate-notes \
-            --verify-tag \
-            dist/*.tar.gz dist/SHA256SUMS dist/THIRD_PARTY_LICENSES.md
+      # Binds every artefact to the commit, workflow and runner that produced
+      # it. Users verify with `gh attestation verify <file> -R <repo>`.
+      - name: Build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
