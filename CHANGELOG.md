@@ -9,6 +9,8 @@ screens may change between minor versions; the **archive format will not break
 without a major version**, and any archive arca has written stays restorable
 with `age`, `zstd` and `tar` regardless.
 
+## [Unreleased]
+
 ## [0.1.0] - 2026-09-29
 
 First public release.
@@ -67,4 +69,5 @@ First public release.
   than from the clock, so the same source rebuilds to the same bytes and a third
   party can check that a published binary matches this tree.
 
+[Unreleased]: https://github.com/henriquemenezes/arca/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/henriquemenezes/arca/releases/tag/v0.1.0

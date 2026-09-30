@@ -33,6 +33,11 @@ notes.
 
 - Group under `### Added`, `### Changed`, `### Fixed`, appending to whatever is
   already in `[Unreleased]`. Keep a Changelog order, and no other headings.
+- If there is no `## [Unreleased]` heading, create one directly above the newest
+  version heading, and add its link reference at the foot of the file:
+  `[Unreleased]: https://github.com/henriquemenezes/arca/compare/<latest tag>...HEAD`.
+  Releasing consumes that section, so the first draft after a release starts by
+  putting it back.
 - Write what changes **for someone using arca**, and why. Not "refactored the
   walker" but what they will now see, and what it means.
 - One entry per user-visible change, not one per commit. Several commits that
