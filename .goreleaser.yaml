@@ -68,11 +68,13 @@ signs:
   # token, and recorded in Sigstore's transparency log. No private key exists to
   # leak or rotate.
   - cmd: cosign
-    certificate: "${artifact}.pem"
+    # One .sigstore.json bundle rather than a loose .sig and .pem: cosign
+    # deprecated the split outputs, and a single file is one fewer thing for
+    # someone verifying a download to fetch and pass correctly.
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
     artifacts: checksum

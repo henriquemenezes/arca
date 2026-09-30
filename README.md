@@ -97,12 +97,17 @@ back (ownership with `--preserve-owner`) is most of what the tool is for.
 the more useful question. Every release also carries a keyless signature over
 the checksum file and a provenance attestation per artefact:
 
+Check the signature on the checksum file first, and only then let `sha256sum`
+check the archives against it — a checksum file you have not authenticated
+proves nothing about the files it lists:
+
 ```bash
 cosign verify-blob SHA256SUMS \
-  --signature SHA256SUMS.sig \
-  --certificate SHA256SUMS.pem \
-  --certificate-identity-regexp '^https://github\.com/henriquemenezes/arca/' \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/henriquemenezes/arca/\.github/workflows/release\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+sha256sum -c SHA256SUMS --ignore-missing
 
 gh attestation verify arca_<version>_linux_amd64.tar.gz -R henriquemenezes/arca
 ```
