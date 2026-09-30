@@ -22,6 +22,10 @@ out="${2:-RELEASE_NOTES.md}"
 awk -v want="## [$version]" '
 	substr($0, 1, length(want)) == want { found = 1; next }
 	found && /^## \[/                   { exit }
+	# The link-reference block at the foot of the file belongs to the document,
+	# not to any one version. Markdown renders it as nothing, so leaving it in
+	# would silently pad every release body with a list that only grows.
+	found && /^\[[^]]+\]: /             { exit }
 	found                               { print }
 ' CHANGELOG.md | sed -e '/./,$!d' >"$out"
 
