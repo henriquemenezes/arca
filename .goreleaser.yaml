@@ -121,10 +121,9 @@ homebrew_casks:
           end
 
 changelog:
-  # No generated changelog. The release notes are the CHANGELOG.md section for
-  # the tag, extracted by scripts/release-notes.sh and passed with
-  # --release-notes. GitHub's own generated notes list merged pull requests,
-  # which this history does not have.
+  # Nothing is ever generated from commit subjects: for this project that text
+  # would be wrong, not merely redundant. The release body is set explicitly
+  # from CHANGELOG.md by the workflow, after publishing, and then checked.
   disable: true
 
 release:

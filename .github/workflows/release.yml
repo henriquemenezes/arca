@@ -76,12 +76,36 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           version: ${{ env.GORELEASER_VERSION }}
-          args: release --clean --release-notes=RELEASE_NOTES.md
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ github.token }}
           # Writing the cask into henriquemenezes/homebrew-tap is a push to
           # another repository, which the token above is not allowed to make.
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      # Set explicitly rather than through --release-notes: passing that flag
+      # alongside a disabled changelog pipe published an empty body once, with
+      # no error anywhere. This cannot fail quietly.
+      - name: Publish the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release edit "$TAG" --notes-file RELEASE_NOTES.md
+
+      - name: The published notes must match the changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" --json body -q .body >published.md
+          if [ ! -s published.md ]; then
+            echo "::error::the release body is empty"
+            exit 1
+          fi
+          diff -u RELEASE_NOTES.md published.md || {
+            echo "::error::the published notes differ from CHANGELOG.md"
+            exit 1
+          }
 
       # Binds every artefact to the commit, workflow and runner that produced
       # it. Users verify with `gh attestation verify <file> -R <repo>`.
