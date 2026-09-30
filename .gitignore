@@ -23,5 +23,6 @@ identity.age
 .envrc
 .DS_Store
 
-# Generated at release time by scripts/third-party-licenses.sh
+# Generated at release time by the scripts in scripts/
 /THIRD_PARTY_LICENSES.md
+/RELEASE_NOTES.md

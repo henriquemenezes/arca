@@ -59,6 +59,14 @@ jobs:
       # GoReleaser shells out to syft to produce the SBOMs.
       - uses: anchore/sbom-action/download-syft@v0
 
+      # Written from CHANGELOG.md, and fails the release if the tag has no
+      # section there - an unnoticed empty release note is worse than a
+      # release that stopped.
+      - name: Release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: ./scripts/release-notes.sh "$TAG" RELEASE_NOTES.md
+
       # Everything the old shell steps did - cross-compile, tarballs,
       # SHA256SUMS, third-party licences, publish - now comes from
       # .goreleaser.yaml, plus the packages, SBOMs and signatures.
@@ -66,7 +74,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           version: ${{ env.GORELEASER_VERSION }}
-          args: release --clean
+          args: release --clean --release-notes=RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ github.token }}
           # Writing the cask into henriquemenezes/homebrew-tap is a push to

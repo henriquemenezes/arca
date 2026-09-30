@@ -119,8 +119,11 @@ homebrew_casks:
           end
 
 changelog:
-  # Same notes the old `gh release create --generate-notes` produced.
-  use: github-native
+  # No generated changelog. The release notes are the CHANGELOG.md section for
+  # the tag, extracted by scripts/release-notes.sh and passed with
+  # --release-notes. GitHub's own generated notes list merged pull requests,
+  # which this history does not have.
+  disable: true
 
 release:
   extra_files:
