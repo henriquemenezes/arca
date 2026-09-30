@@ -14,8 +14,11 @@ reviewed by a person first, and that review is the point.
 
 Read the commits with their **bodies**, not just their subjects:
 
-```
-git log $(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD --format='%h %s%n%b%n---'
+```bash
+# With no tag yet the whole history is the range. A `<root>..HEAD` would leave
+# the root commit out, and on a first release that is the largest one there is.
+last=$(git describe --tags --abbrev=0 2>/dev/null || true)
+git log ${last:+"$last..HEAD"} --format='%h %s%n%b%n---'
 ```
 
 The subject of a commit in this repo says what changed; the body says why, and
