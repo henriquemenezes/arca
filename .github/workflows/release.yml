@@ -97,12 +97,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release view "$TAG" --json body -q .body >published.md
-          if [ ! -s published.md ]; then
+          # $(...) drops every trailing newline and printf puts exactly one
+          # back, on both sides: reading the body back adds one of its own, and
+          # without this the check would fail on every release over a blank line.
+          printf '%s\n' "$(gh release view "$TAG" --json body -q .body)" >published.md
+          printf '%s\n' "$(cat RELEASE_NOTES.md)" >expected.md
+          if [ ! -s published.md ] || ! grep -q '[^[:space:]]' published.md; then
             echo "::error::the release body is empty"
             exit 1
           fi
-          diff -u RELEASE_NOTES.md published.md || {
+          diff -u expected.md published.md || {
             echo "::error::the published notes differ from CHANGELOG.md"
             exit 1
           }
