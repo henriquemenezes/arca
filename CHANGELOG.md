@@ -9,56 +9,7 @@ screens may change between minor versions; the **archive format will not break
 without a major version**, and any archive arca has written stays restorable
 with `age`, `zstd` and `tar` regardless.
 
-## [Unreleased]
-
-### Added
-
-- Interactive interface: `/` opens the finder on the screen that chooses an
-  archive to restore or inspect, as it already did on the source screen. A path
-  is completed and a bare name is searched for below the directory on screen,
-  so an archive several directories down is named rather than walked to.
-- Packages on every release: `.deb` for Debian and Ubuntu, `.rpm` for Fedora,
-  `.apk` for Alpine. The binary is static and shells out to nothing, so the
-  packages declare no dependencies at all and one of them serves every version
-  of every derivative.
-- Homebrew on macOS: `brew install --cask henriquemenezes/tap/arca`.
-- Builds for 32-bit arm (`armv7`), which is what an older Raspberry Pi or a NAS
-  runs — machines a backup is quite likely to be written from.
-- Every release is signed and attested. `SHA256SUMS` carries a keyless Sigstore
-  signature, each artefact carries a build provenance attestation, and an SBOM
-  is published alongside. A checksum answers whether the file is the one the
-  release page lists; only the attestation answers whether this project's CI
-  built it, which for a tool that handles your keys is the question that
-  matters. The README spells out both commands.
-- Release notes are this file's section for the tag. What appears on the release
-  page is what was written and reviewed here, not a list of commit subjects.
-
-### Changed
-
-- The description says **Unix-like** rather than Unix, and no longer calls
-  `age` and `zstd` stock tools: neither ships in a base install, and the
-  restore one-liner needs GNU tar or bsdtar for its `-C`. The guarantee is
-  unchanged — only the claims about it are now accurate.
-- `make test-stock` is now `make test-upstream`.
-- Releases are built by GoReleaser instead of a loop in the Makefile. `make
-  build` and `make cross` are unchanged; `make dist` is gone, and `make
-  snapshot` takes its place by building every release artefact locally without
-  needing a tag.
-- Builds are reproducible: the timestamps in the output come from the commit
-  rather than from the clock, so the same source rebuilds to the same bytes and
-  a third party can check that the published binary matches this tree.
-
-### Fixed
-
-- The emergency-restore tests run on macOS in CI as well, so the `tar -xp -C`
-  in the README is exercised against bsdtar and not only against GNU tar.
-- A binary installed with `go install` reported its version as `dev`, and wrote
-  that into the `tool_version` of the manifest of every archive it packed — a
-  backup that could not be traced back to a release. `go install` has no way to
-  pass linker flags, so the version now falls back to the module version that Go
-  stamps into the binary, which for `go install ...@v0.1.0` is the tag.
-
-## [0.1.0] - 2026-09-26
+## [0.1.0] - 2026-09-29
 
 First public release.
 
@@ -84,6 +35,10 @@ First public release.
 - Interactive interface, opened by running `arca` with no arguments on a
   terminal: pick sources, map them, write exclude patterns or apply ready-made
   preset sets, review and run.
+- `/` opens a finder on both the source screen and the screen that chooses an
+  archive to restore or inspect. A path is completed and a bare name is searched
+  for below the directory on screen, so a file several directories down is named
+  rather than walked to.
 - Encryption with age in either passphrase mode or multi-recipient key mode;
   a strength check on passphrases the user invents, overridable only with
   `--allow-weak-passphrase`.
@@ -94,6 +49,22 @@ First public release.
   `$ARCA_HOME` overriding the directory and flags overriding the file.
 - Compression and encryption dispatched by magic bytes rather than file
   extension, so a renamed archive still restores.
+- Builds for Linux (amd64, arm64, armv7) and macOS (amd64, arm64). The armv7
+  build is for the older Raspberry Pi and the NAS — machines a backup is quite
+  likely to be written from.
+- Packages on every release: `.deb` for Debian and Ubuntu, `.rpm` for Fedora,
+  `.apk` for Alpine. The binary is static and shells out to nothing, so the
+  packages declare no dependencies at all and one of them serves every version
+  of every derivative.
+- Homebrew on macOS: `brew install --cask henriquemenezes/tap/arca`.
+- Every release is signed and attested. `SHA256SUMS` carries a keyless Sigstore
+  signature, each artefact carries a build provenance attestation, and an SBOM
+  is published alongside. A checksum answers whether the file is the one the
+  release page lists; only the attestation answers whether this project's CI
+  built it, which for a tool that handles your keys is the question that
+  matters. The README spells out both commands.
+- Reproducible builds: the timestamps in the output come from the commit rather
+  than from the clock, so the same source rebuilds to the same bytes and a third
+  party can check that a published binary matches this tree.
 
-[Unreleased]: https://github.com/henriquemenezes/arca/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/henriquemenezes/arca/releases/tag/v0.1.0
