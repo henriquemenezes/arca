@@ -54,7 +54,9 @@ jobs:
       # Keyless: the signing identity is this workflow, proven by the OIDC
       # token and recorded in Sigstore's transparency log. There is no private
       # key to leak, which is the point for a tool that handles age keys.
-      - uses: sigstore/cosign-installer@v4
+      # Pinned to a patch release on purpose: this action publishes v3 as a
+      # floating major but nothing for v4, so `@v4` does not resolve.
+      - uses: sigstore/cosign-installer@v4.1.2
 
       # GoReleaser shells out to syft to produce the SBOMs.
       - uses: anchore/sbom-action/download-syft@v0
