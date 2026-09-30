@@ -9,7 +9,7 @@ GREL_VER := v2.18.2
 
 DIST     := dist
 
-.PHONY: help build install test test-upstream check tools lint fmt vuln clean cross snapshot release-check notes licenses
+.PHONY: help build install test test-upstream check tools lint fmt vuln clean cross snapshot release-check release-prep notes licenses
 
 ## help: list the targets in this file
 help:
@@ -87,6 +87,10 @@ release-check: $(TOOLS)/goreleaser
 $(TOOLS)/goreleaser:
 	@mkdir -p $(TOOLS)
 	GOBIN=$(CURDIR)/$(TOOLS) go install github.com/goreleaser/goreleaser/v2@$(GREL_VER)
+
+## release-prep: move [Unreleased] into a numbered section, e.g. VERSION=v0.2.0
+release-prep:
+	@./scripts/release-prep.sh "$(VERSION)"
 
 ## notes: preview the release notes for a version, e.g. make notes VERSION=v0.1.0
 notes:

@@ -48,7 +48,9 @@ why the change is right and what it would have cost to do otherwise — read
 change gets an entry under `[Unreleased]`; `/changelog` drafts them from the
 commits for review.
 
-Releasing is one action: push an annotated tag `vX.Y.Z`. `.github/workflows/release.yml`
+Releasing is two: `make release-prep VERSION=vX.Y.Z` moves `[Unreleased]` into a
+dated section and fixes the link references — mechanical, and it refuses to move
+an empty section — then you commit that and push an annotated tag `vX.Y.Z`. `.github/workflows/release.yml`
 then builds every platform with GoReleaser, signs `SHA256SUMS` with a keyless
 Sigstore identity, attests provenance, publishes packages and the Homebrew cask,
 and takes the release notes from this version's `CHANGELOG.md` section — so a tag
